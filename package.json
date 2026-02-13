@@ -9,11 +9,11 @@
     "build": "vite build",
     "preview": "vite preview"
   },
-  "devDependencies": {
-    "sass": "^1.85.0",
-    "vite": "^6.1.0"
-  },
   "dependencies": {
-    "tone": "^15.0.4"
-  }
+    "sass": "^1.85.0",
+    "tone": "^15.0.4",
+    "vite": "^6.1.0",
+    "web-midi-api": "^2.4.0"
+  },
+  "devDependencies": {}
 }

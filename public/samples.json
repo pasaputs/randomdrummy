@@ -1,0 +1,61 @@
+{
+  "kick": [
+    "samples/kicks/KICK (23).wav",
+    "samples/kicks/KICK (24).wav",
+    "samples/kicks/KICK (25).wav",
+    "samples/kicks/KICK (26).wav",
+    "samples/kicks/KICK (27).wav",
+    "samples/kicks/KICK (28).wav",
+    "samples/kicks/KICK (29).wav",
+    "samples/kicks/KICK (30).wav",
+    "samples/kicks/KICK (31).wav",
+    "samples/kicks/KICK (32).wav",
+    "samples/kicks/My Favorite Kick.wav",
+    "samples/kicks/NewDopeSSOKickMixed.wav",
+    "samples/kicks/PASSION kick.wav",
+    "samples/kicks/SH_03_Kick_1.wav",
+    "samples/kicks/TM-88 Kicks [Bill].wav",
+    "samples/kicks/TM-88 Kicks [Metro X TM-88].wav"
+  ],
+  "snare": [
+    "samples/snare/SNARE (1).wav",
+    "samples/snare/SNARE (16).wav",
+    "samples/snare/SNARE (17).wav",
+    "samples/snare/SNARE (18).wav",
+    "samples/snare/SNARE (19).wav",
+    "samples/snare/SNARE (2).mp3",
+    "samples/snare/SNARE (20).wav",
+    "samples/snare/SNARE (21).wav",
+    "samples/snare/SNARE (22).wav",
+    "samples/snare/SNARE (23).wav",
+    "samples/snare/SNARE (24).wav",
+    "samples/snare/SNARE (25).wav",
+    "samples/snare/SNARE (3).mp3",
+    "samples/snare/SNARE (4).mp3",
+    "samples/snare/SNARE (5).mp3"
+  ],
+  "hihat": [
+    "samples/hi hats/HH (10).wav",
+    "samples/hi hats/HH (11).wav",
+    "samples/hi hats/HH (12).wav",
+    "samples/hi hats/HH (13).wav",
+    "samples/hi hats/HH (14).wav",
+    "samples/hi hats/HH (3).wav",
+    "samples/hi hats/HH (4).wav",
+    "samples/hi hats/HH (5).wav",
+    "samples/hi hats/HH (6).wav",
+    "samples/hi hats/HH (7).wav",
+    "samples/hi hats/HH (8).wav",
+    "samples/hi hats/HH (9).wav"
+  ],
+  "resonator": [
+    "samples/808/808 (10).wav",
+    "samples/808/808 (3).wav",
+    "samples/808/808 (4).wav",
+    "samples/808/808 (5).wav",
+    "samples/808/808 (6).wav",
+    "samples/808/808 (7).wav",
+    "samples/808/808 (8).wav",
+    "samples/808/808 (9).wav"
+  ]
+}

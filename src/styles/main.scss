@@ -1,0 +1,127 @@
+// Ableton Live 12 Dark Theme
+$bg-color: #2e2e2e;
+$text-color: #d3d3d3;
+$accent-color: #ff7f50;
+$darker-bg: #1e1e1e;
+$grid-lines: #444;
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+    background-color: $bg-color;
+    color: $text-color;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+header {
+    padding: 1rem;
+    background-color: $darker-bg;
+    border-bottom: 1px solid $grid-lines;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    h1 {
+        font-size: 1.2rem;
+        font-weight: 700;
+        letter-spacing: 2px;
+        color: $accent-color;
+    }
+
+    .tabs button {
+        background: transparent;
+        border: none;
+        color: $text-color;
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        font-weight: 600;
+        text-transform: uppercase;
+        opacity: 0.6;
+        transition: opacity 0.2s;
+
+        &.active,
+        &:hover {
+            opacity: 1;
+            border-bottom: 2px solid $accent-color;
+        }
+    }
+}
+
+main {
+    flex: 1;
+    overflow: hidden; // Parent manages scroll
+    position: relative;
+    padding: 0; // Remove padding to use full space
+    display: flex;
+    flex-direction: column;
+}
+
+footer {
+    padding: 1rem;
+    background-color: $darker-bg;
+    border-top: 1px solid $grid-lines;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .transport-controls {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+
+        button {
+            background: $grid-lines;
+            color: $text-color;
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+
+            &:hover {
+                background: lighten($grid-lines, 10%);
+            }
+
+            &:active {
+                background: darken($grid-lines, 5%);
+            }
+        }
+
+        .tempo-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+
+            input {
+                background: $grid-lines;
+                border: none;
+                color: $text-color;
+                padding: 0.3rem;
+                width: 60px;
+                text-align: center;
+                border-radius: 2px;
+            }
+        }
+    }
+}
+
+// Global utility classes for UI components
+.grid-container {
+    display: grid;
+    gap: 1rem;
+    height: 100%;
+}

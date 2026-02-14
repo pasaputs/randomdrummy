@@ -19,6 +19,9 @@ export class Sequencer {
         this.isPlaying = false;
         this.currentStep = 0;
 
+        this.muteStates = { kick: false, snare: false, hihat: false, resonator: false, live: false, pianoloop: false };
+        this.soloStates = { kick: false, snare: false, hihat: false, resonator: false, live: false, pianoloop: false };
+
         // Schedule the loop
         this.loopId = null;
     }
@@ -48,6 +51,9 @@ export class Sequencer {
         const step = this.currentStep % this.steps;
         this.remixAmount = this.remixAmount || 0;
 
+        // Check Logic: Is any track soloed?
+        const isAnySolo = Object.values(this.soloStates).some(v => v === true);
+
         this.tracks.forEach(track => {
             let shouldPlay = this.pattern[track][step];
 
@@ -56,7 +62,11 @@ export class Sequencer {
                 shouldPlay = true;
             }
 
-            if (shouldPlay) {
+            // Mute/Solo Logic
+            const isMuted = this.muteStates[track];
+            const isSoloed = this.soloStates[track];
+
+            if (shouldPlay && !isMuted && (!isAnySolo || isSoloed)) {
                 // Trigger sound
                 this.audioEngine.trigger(track, time);
             }

@@ -86,15 +86,7 @@ export class UIManager {
     renderPianoControls(container) {
         const strip = document.createElement('div');
         strip.className = 'piano-controls';
-        strip.style.width = '240px';
-        strip.style.background = '#1e1e1e';
-        strip.style.borderRight = '1px solid #444';
-        strip.style.padding = '10px';
-        strip.style.display = 'flex';
-        strip.style.flexDirection = 'column';
-        strip.style.gap = '8px';
-        strip.style.color = '#ddd';
-        strip.style.flexShrink = '0'; // Prevent shrinking
+        // Removed inline styles in favor of CSS class
 
         // Title
         const title = document.createElement('div');
@@ -103,12 +95,14 @@ export class UIManager {
         title.style.fontWeight = 'bold';
         title.style.color = '#888';
         title.style.letterSpacing = '1px';
+        title.style.marginBottom = '5px';
         strip.appendChild(title);
 
         // Upload Row
         const uploadRow = document.createElement('div');
         uploadRow.style.display = 'flex';
         uploadRow.style.gap = '5px';
+        uploadRow.style.marginBottom = '5px';
 
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
@@ -129,26 +123,10 @@ export class UIManager {
         uploadBtn.style.cssText = btnStyle;
         uploadBtn.onclick = () => fileInput.click();
 
-        uploadBtn.onclick = () => fileInput.click();
-
         uploadRow.appendChild(uploadBtn);
-
-        uploadBtn.onclick = () => fileInput.click();
-
-        uploadRow.appendChild(uploadBtn);
-
-        // Resample Button Removed (Moved to Mixer Track "Pianoloop")
-
         // Add hidden input
         uploadRow.appendChild(fileInput);
         strip.appendChild(uploadRow);
-
-        // Controls Grid (Vol, Pan, Pitch, Rev, Dly, Time)
-        const grid = document.createElement('div');
-        grid.style.display = 'grid';
-        grid.style.gridTemplateColumns = '1fr 1fr 1fr';
-        grid.style.gap = '5px';
-        grid.style.marginTop = '5px';
 
         // Helper for Knobs/Sliders
         const createControl = (label, type, min, max, val, callback) => {
@@ -170,31 +148,50 @@ export class UIManager {
             inp.value = val;
             inp.style.width = '100%';
             inp.oninput = (e) => callback(parseFloat(e.target.value));
+            inp.onmouseup = function () { this.blur(); };
+            inp.ontouchend = function () { this.blur(); };
 
             wrap.appendChild(lb);
             wrap.appendChild(inp);
             return wrap;
         };
 
-        // Vol (-60 to 0)
-        grid.appendChild(createControl("VOL", "range", -60, 6, -10, (v) => this.audioEngine.setPianoVolume(v)));
+        // GROUP 1: TONE (Vol, Pan, Pitch)
+        const toneGroup = document.createElement('div');
+        toneGroup.className = 'control-group';
 
-        // Pitch (-12 to 12)
-        grid.appendChild(createControl("PITCH", "pitch", -12, 12, 0, (v) => this.audioEngine.setPianoPitch(v)));
+        const toneLabel = document.createElement('div');
+        toneLabel.className = 'group-label';
+        toneLabel.textContent = "TONE";
+        toneGroup.appendChild(toneLabel);
 
-        // Pan (-1 to 1)
-        grid.appendChild(createControl("PAN", "range", -1, 1, 0, (v) => this.audioEngine.setPianoPan(v)));
+        const toneGrid = document.createElement('div');
+        toneGrid.className = 'control-grid';
+        toneGrid.appendChild(createControl("VOL", "range", -60, 6, -10, (v) => this.audioEngine.setPianoVolume(v)));
+        toneGrid.appendChild(createControl("PAN", "range", -1, 1, 0, (v) => this.audioEngine.setPianoPan(v)));
+        toneGrid.appendChild(createControl("PITCH", "pitch", -12, 12, 0, (v) => this.audioEngine.setPianoPitch(v)));
+        toneGroup.appendChild(toneGrid);
+        strip.appendChild(toneGroup);
 
-        // Reverb (0 to 1)
-        grid.appendChild(createControl("REV", "range", 0, 1, 0, (v) => this.audioEngine.setPianoReverb(v)));
+        // GROUP 2: FX (Rev, Dly, Time, Arp, Rate)
+        const fxGroup = document.createElement('div');
+        fxGroup.className = 'control-group';
 
-        // Delay (0 to 1)
-        grid.appendChild(createControl("DLY", "range", 0, 1, 0, (v) => this.audioEngine.setPianoDelay(v, undefined)));
+        const fxLabel = document.createElement('div');
+        fxLabel.className = 'group-label';
+        fxLabel.textContent = "FX";
+        fxGroup.appendChild(fxLabel);
 
-        // Time (0 to 1) - shared logic with tracks
-        grid.appendChild(createControl("TIME", "range", 0, 1, 0.25, (v) => this.audioEngine.setPianoDelay(this.audioEngine.pianoDelay?.wet.value || 0, v)));
+        const fxGrid = document.createElement('div');
+        fxGrid.className = 'control-grid';
+        fxGrid.appendChild(createControl("REV", "range", 0, 1, 0, (v) => this.audioEngine.setPianoReverb(v)));
+        fxGrid.appendChild(createControl("DLY", "range", 0, 1, 0, (v) => this.audioEngine.setPianoDelay(v, undefined)));
+        fxGrid.appendChild(createControl("TIME", "range", 0, 1, 0.25, (v) => this.audioEngine.setPianoDelay(this.audioEngine.pianoDelay?.wet.value || 0, v)));
+        fxGrid.appendChild(createControl("ARP", "range", 0, 1, 0, (v) => this.audioEngine.setPianoArpWet(v)));
+        fxGrid.appendChild(createControl("RATE", "range", 0, 1, 0.3, (v) => this.audioEngine.setPianoArpRate(v)));
+        fxGroup.appendChild(fxGrid);
+        strip.appendChild(fxGroup);
 
-        strip.appendChild(grid);
         container.appendChild(strip);
     }
 

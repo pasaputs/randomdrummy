@@ -17,9 +17,9 @@ export class SequencerGrid {
         wrapper.className = 'sequencer-grid';
         wrapper.style.display = 'grid';
 
-        // Grid Template: Label (sticky) + 32 Steps + Dice
+        // Grid Template: Label (sticky) + 32 Steps + Dice + Mute + Solo
         // We'll make the label sticky so it stays visible while scrolling steps
-        wrapper.style.gridTemplateColumns = '100px repeat(32, 40px) 50px';
+        wrapper.style.gridTemplateColumns = '100px repeat(32, 40px) 40px 30px 30px';
         wrapper.style.gap = '2px';
         wrapper.style.padding = '10px';
         wrapper.style.minWidth = 'fit-content';
@@ -88,17 +88,38 @@ export class SequencerGrid {
             const diceBtn = document.createElement('button');
             diceBtn.textContent = '🎲';
             diceBtn.className = 'dice-btn';
-            diceBtn.style.background = 'transparent';
-            diceBtn.style.border = '1px solid #444';
-            diceBtn.style.cursor = 'pointer';
-            diceBtn.style.position = 'sticky';
-            diceBtn.style.right = '0'; // Sticky right? Might be annoying if it covers steps. 
-            // Let's just keep it at the end of the scroll.
-            diceBtn.addEventListener('click', () => {
+            diceBtn.title = 'Randomize Pattern';
+            diceBtn.onclick = () => {
                 this.sequencer.randomizeTrack(track);
-                this.render(); // Re-render to show new pattern
-            });
+                this.render();
+            };
             wrapper.appendChild(diceBtn);
+
+            // 4. Mute Button
+            const muteBtn = document.createElement('button');
+            muteBtn.textContent = 'M';
+            muteBtn.className = 'mute-btn';
+            if (this.sequencer.muteStates[track]) muteBtn.classList.add('active-mute');
+            muteBtn.onclick = () => {
+                this.sequencer.muteStates[track] = !this.sequencer.muteStates[track];
+                muteBtn.classList.toggle('active-mute');
+            };
+            wrapper.appendChild(muteBtn);
+
+            // 5. Solo Button
+            const soloBtn = document.createElement('button');
+            soloBtn.textContent = 'S';
+            soloBtn.className = 'solo-btn';
+            if (this.sequencer.soloStates[track]) soloBtn.classList.add('active-solo');
+            soloBtn.onclick = () => {
+                this.sequencer.soloStates[track] = !this.sequencer.soloStates[track];
+                soloBtn.classList.toggle('active-solo');
+                // We might need to refresh all solo buttons if we wanted exclusive solo visual feedback logic, 
+                // but checking state on render or tick is enough for audio. 
+                // However, visual feedback of other tracks being 'dimmed' is not requested, simply S button active.
+                this.render(); // Re-render to ensure consistency if needed? Not strictly necessary if just toggling class, but good if we had inter-track dependencies.
+            };
+            wrapper.appendChild(soloBtn);
         });
 
         scrollContainer.appendChild(wrapper);

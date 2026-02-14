@@ -39,18 +39,16 @@ export class AudioEngine {
         // Effect Chain
         this.pianoPitch = new Tone.PitchShift(0);
         this.pianoPanner = new Tone.Panner(0);
+        this.pianoTremolo = new Tone.Tremolo(5, 0).start(); // 5Hz, 0 Depth
         this.pianoReverb = new Tone.Reverb({ decay: 4, wet: 0 }); // Default dry
         this.pianoDelay = new Tone.FeedbackDelay("8n", 0.3); // Default dry
         this.pianoDelay.wet.value = 0;
 
-        // Chain: Sampler -> Pitch -> Panner -> Delay -> Reverb -> Master
-        // (Typically Delay before Reverb or vice versa, user asked for Panner -> Reverb -> Delay, but standard is often Dly->Rev. Let's follow user: Pitch -> Pan -> Reverb -> Delay.)
-
-        // User Order: Sampler -> PitchShift -> Panner -> Reverb -> Delay -> Master
-        // User Order: Sampler -> PitchShift -> Panner -> Reverb -> Delay -> Volume -> Master
+        // Chain: Sampler -> Pitch -> Panner -> Tremolo -> Reverb -> Delay -> Volume -> Master
         this.pianoSampler.connect(this.pianoPitch);
         this.pianoPitch.connect(this.pianoPanner);
-        this.pianoPanner.connect(this.pianoReverb);
+        this.pianoPanner.connect(this.pianoTremolo);
+        this.pianoTremolo.connect(this.pianoReverb);
         this.pianoReverb.connect(this.pianoDelay);
 
         // Volume Control (End of Chain)
@@ -190,6 +188,39 @@ export class AudioEngine {
         const cents = val;
         if (this.pianoPitch) {
             this.pianoPitch.detune.rampTo(cents, 0.1);
+        }
+    }
+
+    setPianoArpWet(val) {
+        // val 0-1
+        if (this.pianoTremolo) {
+            this.pianoTremolo.wet.rampTo(val, 0.1); // depth is wet/depth in Tone.Tremolo (actually 'depth' prop exists too, but wet controls mix)
+            // Tone.Tremolo usually has .depth (0-1) and .wet (0-1).
+            // Users usually mean depth. But let's check docs or common usage.
+            // Tone.Tremolo: wet controls effect mix. depth controls amplitude modulation depth.
+            // Let's control depth if wet is 1? Or wet?
+            // "Controls intensity" -> usually Depth.
+            // But let's map UI 0-1 to Depth.
+            // And ensure Wet is 1? Or just use Wet?
+            // If Wet is 0, no effect. If Wet is 1, full effect.
+            // Let's use Wet for "Intensity" as requested (Wet/Dry mix).
+            // But if Depth is 0, Wet 1 does nothing?
+            // Let's set Depth to 1 by default (in constructor? No, constructed with 0?). 
+            // Wait, constructor `new Tone.Tremolo(5, 0)` -> 0 is depth.
+            // So if I only change Wet, it might stay flat.
+            // Let's control DEPTH.
+            this.pianoTremolo.depth.rampTo(val, 0.1);
+            // And set Wet to 1? Or keep Wet 1?
+            // Let's set Wet to 1 in constructor or here.
+            if (this.pianoTremolo.wet.value !== 1) this.pianoTremolo.wet.value = 1;
+        }
+    }
+
+    setPianoArpRate(val) {
+        // val 0-1 mapped to 1Hz - 15Hz
+        const rate = 1 + (val * 14);
+        if (this.pianoTremolo) {
+            this.pianoTremolo.frequency.rampTo(rate, 0.1);
         }
     }
 

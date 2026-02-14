@@ -157,3 +157,79 @@ input[type=range].vertical {
     direction: rtl;
     width: 20px;
 }
+
+// Piano Controls Sidebar
+.piano-controls {
+    width: 320px;
+    /* Expanded Width */
+    background: $darker-bg;
+    border-right: 1px solid $grid-lines;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    color: $text-color;
+    flex-shrink: 0;
+    position: relative;
+    /* Z-Index Context */
+    z-index: 10;
+    /* Ensure on top */
+    pointer-events: auto;
+    /* Ensure clickable */
+    overflow-y: auto;
+    /* Scroll if needed */
+
+    .control-group {
+        border-top: 1px solid #444;
+        padding-top: 8px;
+
+        .group-label {
+            font-size: 0.65rem;
+            color: $accent-color;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            /* 4 columns for compact look */
+            gap: 8px;
+        }
+    }
+}
+
+// Sequencer Buttons (Dice, Mute, Solo)
+.dice-btn,
+.mute-btn,
+.solo-btn {
+    background: transparent;
+    border: 1px solid #444;
+    cursor: pointer;
+    color: #888;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+
+    &:hover {
+        background: #444;
+        color: #fff;
+    }
+}
+
+.mute-btn.active-mute {
+    background: #ff4444;
+    color: white;
+    border-color: #ff4444;
+}
+
+.solo-btn.active-solo {
+    background: #FFD700;
+    /* Gold */
+    color: #111;
+    border-color: #FFD700;
+    font-weight: bold;
+}

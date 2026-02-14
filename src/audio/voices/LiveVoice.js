@@ -15,11 +15,8 @@ export class LiveVoice {
 
     trigger(time, velocity = 1) {
         if (this.player && this.player.loaded) {
-            this.player.start(time);
-            console.log("🔊 Playing PIANOLOOP at", time); // Commented out to reduce spam, but verify functionality
-        } else if (this.buffer) {
-            // Fallback if loaded is false but we set buffer manually?
-            // Tone.Player should be loaded if buffer is set.
+            this.player.start(time, this.offset || 0);
+            // console.log("🔊 Playing PIANOLOOP at", time);
         }
     }
 

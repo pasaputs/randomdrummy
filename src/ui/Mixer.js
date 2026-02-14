@@ -444,6 +444,40 @@ export class Mixer {
             panWrap.appendChild(panIn);
             mixRow.appendChild(panWrap);
 
+            // START Offset Slider (Recorded Tracks Only)
+            if (track === 'live' || track === 'pianoloop') {
+                const startWrap = document.createElement('div');
+                startWrap.style.textAlign = 'center';
+                startWrap.style.marginTop = '10px';
+
+                const startTitle = document.createElement('div');
+                startTitle.textContent = 'START';
+                startTitle.style.fontSize = '0.6rem';
+                startTitle.style.color = '#ff7f50'; // Accent color
+
+                const startIn = document.createElement('input');
+                startIn.type = 'range';
+                startIn.min = 0;
+                startIn.max = 2; // 2 seconds max
+                startIn.step = 0.001; // ms precision
+                startIn.value = 0;
+                startIn.style.width = '80px';
+
+                // Load persisted value if any
+                try {
+                    const offsets = JSON.parse(localStorage.getItem('drummimasin_offsets') || '{}');
+                    if (offsets[track]) startIn.value = offsets[track];
+                } catch (e) { }
+
+                startIn.oninput = (e) => {
+                    this.audioEngine.setTrackOffset(track, parseFloat(e.target.value));
+                };
+
+                startWrap.appendChild(startTitle);
+                startWrap.appendChild(startIn);
+                mixRow.appendChild(startWrap);
+            }
+
             // Vol
             const volIn = document.createElement('input');
             volIn.type = 'range';

@@ -142,6 +142,36 @@ export class AudioEngine {
         }
     }
 
+    setTrackOffset(track, val) {
+        // val is 0 to 2 seconds
+        if (this.voices[track]) {
+            this.voices[track].offset = val;
+
+            // Persist
+            try {
+                const offsets = JSON.parse(localStorage.getItem('drummimasin_offsets') || '{}');
+                offsets[track] = val;
+                localStorage.setItem('drummimasin_offsets', JSON.stringify(offsets));
+            } catch (e) {
+                console.warn('Failed to save offsets', e);
+            }
+        }
+    }
+
+    loadOffsets() {
+        try {
+            const offsets = JSON.parse(localStorage.getItem('drummimasin_offsets') || '{}');
+            Object.keys(offsets).forEach(track => {
+                if (this.voices[track]) {
+                    this.voices[track].offset = offsets[track];
+                }
+            });
+            console.log("Loaded Sample Offsets", offsets);
+        } catch (e) {
+            console.warn('Failed to load offsets', e);
+        }
+    }
+
     setPianoVolume(db) {
         if (this.pianoVolume) {
             if (db <= -60) this.pianoVolume.volume.rampTo(-Infinity, 0.1);
@@ -238,7 +268,9 @@ export class AudioEngine {
         await Tone.start();
         console.log('Audio Context Started');
         console.log('Audio Context Started');
+        console.log('Audio Context Started');
         // this.setupMIDI(); // Moved to MIDIController
+        this.loadOffsets();
     }
 
     loadSample(track, filename) {

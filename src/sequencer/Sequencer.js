@@ -3,15 +3,16 @@ import * as Tone from 'tone';
 export class Sequencer {
     constructor(audioEngine) {
         this.audioEngine = audioEngine;
-        this.steps = 16;
-        this.tracks = ['kick', 'snare', 'hihat', 'resonator'];
+        this.steps = 32;
+        this.tracks = ['kick', 'snare', 'hihat', 'resonator', 'live'];
 
         // logic: pattern[trackIndex][stepIndex] = true/false (or velocity)
         this.pattern = {
-            kick: new Array(16).fill(false),
-            snare: new Array(16).fill(false),
-            hihat: new Array(16).fill(false),
-            resonator: new Array(16).fill(false)
+            kick: new Array(32).fill(false),
+            snare: new Array(32).fill(false),
+            hihat: new Array(32).fill(false),
+            resonator: new Array(32).fill(false),
+            live: new Array(32).fill(false)
         };
 
         this.isPlaying = false;
@@ -19,6 +20,19 @@ export class Sequencer {
 
         // Schedule the loop
         this.loopId = null;
+    }
+
+    start() {
+        Tone.Transport.start();
+        this.isPlaying = true;
+    }
+
+    stop() {
+        Tone.Transport.stop();      // Stop the clock
+        Tone.Transport.position = 0; // Force position to 0:0:0
+        this.currentStep = 0;       // Reset internal step counter
+        this.isPlaying = false;
+        console.log("Sequencer Stopped & Reset to 0");
     }
 
     init() {

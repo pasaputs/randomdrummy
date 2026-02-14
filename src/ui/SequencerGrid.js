@@ -6,12 +6,23 @@ export class SequencerGrid {
 
     render() {
         this.gridContainer.innerHTML = '';
+
+        // Scrollable Container
+        const scrollContainer = document.createElement('div');
+        scrollContainer.style.overflowX = 'auto';
+        scrollContainer.style.width = '100%';
+        scrollContainer.style.paddingBottom = '10px'; // Space for scrollbar
+
         const wrapper = document.createElement('div');
         wrapper.className = 'sequencer-grid';
         wrapper.style.display = 'grid';
-        wrapper.style.gridTemplateColumns = '100px repeat(16, 1fr) 50px'; // Label + 16 Steps + Dice
-        wrapper.style.gap = '5px';
+
+        // Grid Template: Label (sticky) + 32 Steps + Dice
+        // We'll make the label sticky so it stays visible while scrolling steps
+        wrapper.style.gridTemplateColumns = '100px repeat(32, 40px) 50px';
+        wrapper.style.gap = '2px';
         wrapper.style.padding = '10px';
+        wrapper.style.minWidth = 'fit-content';
 
         this.sequencer.tracks.forEach((track, trackIndex) => {
             // 1. Label
@@ -20,19 +31,37 @@ export class SequencerGrid {
             label.className = 'track-label';
             label.style.alignSelf = 'center';
             label.style.fontWeight = 'bold';
+            label.style.position = 'sticky';
+            label.style.left = '0';
+            label.style.background = '#2e2e2e'; // Match bg to cover scrolling steps
+            label.style.zIndex = '10';
+            label.style.paddingRight = '10px';
             wrapper.appendChild(label);
 
-            // 2. Steps (1-16)
-            for (let i = 0; i < 16; i++) {
+            // 2. Steps (1-32)
+            for (let i = 0; i < 32; i++) {
                 const btn = document.createElement('button');
                 btn.className = 'step-btn';
                 btn.dataset.track = track;
                 btn.dataset.step = i;
                 btn.style.width = '100%';
-                btn.style.aspectRatio = '1';
+                btn.style.height = '40px'; // Fixed height
                 btn.style.background = '#444';
                 btn.style.border = '1px solid #555';
                 btn.style.cursor = 'pointer';
+                btn.title = `Step ${i + 1}`;
+
+                // Visual Divider after step 16 (index 15)
+                if (i === 16) {
+                    btn.style.marginLeft = '10px'; // Visual gap
+                }
+
+                // Color change for second bar (17-32) logic if desired?
+                // "Add a visual divider or slight color change"
+                // Let's darken the second bar slightly 
+                if (i >= 16) {
+                    btn.style.background = '#3a3a3a';
+                }
 
                 // Active state check
                 if (this.sequencer.pattern[track][i]) {
@@ -47,7 +76,8 @@ export class SequencerGrid {
                         btn.style.background = '#ff7f50';
                     } else {
                         btn.classList.remove('active');
-                        btn.style.background = '#444';
+                        // Restore bg based on bar
+                        btn.style.background = (i >= 16) ? '#3a3a3a' : '#444';
                     }
                 });
 
@@ -61,6 +91,9 @@ export class SequencerGrid {
             diceBtn.style.background = 'transparent';
             diceBtn.style.border = '1px solid #444';
             diceBtn.style.cursor = 'pointer';
+            diceBtn.style.position = 'sticky';
+            diceBtn.style.right = '0'; // Sticky right? Might be annoying if it covers steps. 
+            // Let's just keep it at the end of the scroll.
             diceBtn.addEventListener('click', () => {
                 this.sequencer.randomizeTrack(track);
                 this.render(); // Re-render to show new pattern
@@ -68,7 +101,8 @@ export class SequencerGrid {
             wrapper.appendChild(diceBtn);
         });
 
-        this.gridContainer.appendChild(wrapper);
+        scrollContainer.appendChild(wrapper);
+        this.gridContainer.appendChild(scrollContainer);
     }
 
     highlightStep(stepIndex) {

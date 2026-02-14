@@ -2,7 +2,7 @@ import * as Tone from 'tone';
 
 export class ResonatorVoice {
     constructor() {
-        this.output = new Tone.Gain(1);
+        this.output = new Tone.Volume(0);
 
         // Resonator / Comb Filter
         this.comb = new Tone.FeedbackCombFilter({
@@ -32,25 +32,38 @@ export class ResonatorVoice {
         // Sample Path (808)
         this.player = new Tone.Player().connect(this.output);
         this.useSample = false;
+        this.mode = 'empty';
     }
 
     trigger(time, velocity = 1) {
-        if (this.useSample && this.player.loaded) {
+        if (this.mode === 'empty') return;
+
+        if (this.mode === 'sample' && this.player.loaded) {
             this.player.start(time);
             return;
         }
-        // Randomize resonator slightly for variation
-        // this.comb.delayTime.value = 0.002 + (Math.random() * 0.005);
-        this.envelope.triggerAttackRelease(0.1, time, velocity);
+
+        if (this.mode === 'synth') {
+            // Randomize resonator slightly for variation
+            // this.comb.delayTime.value = 0.002 + (Math.random() * 0.005);
+            this.envelope.triggerAttackRelease(0.1, time, velocity);
+        }
     }
 
     loadSample(url) {
         this.player.load(url).then(() => {
             this.useSample = true;
+            this.mode = 'sample';
         });
     }
 
     setTone(val) {
         this.comb.resonance.value = val;
+    }
+
+    setDetune(cents) {
+        this.synth.detune.value = cents;
+        const rate = Math.pow(2, cents / 1200);
+        this.player.playbackRate = rate;
     }
 }

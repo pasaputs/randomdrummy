@@ -2,7 +2,7 @@ import * as Tone from 'tone';
 
 export class KickVoice {
     constructor() {
-        this.output = new Tone.Gain(1);
+        this.output = new Tone.Volume(0);
 
         // Synth Path
         this.synth = new Tone.MembraneSynth({
@@ -21,12 +21,15 @@ export class KickVoice {
         // Sample Path
         this.player = new Tone.Player().connect(this.output);
         this.useSample = false;
+        this.mode = 'empty'; // default: 'empty', 'synth', 'sample'
     }
 
     trigger(time, velocity = 1) {
-        if (this.useSample && this.player.loaded) {
+        if (this.mode === 'empty') return; // Silent
+
+        if (this.mode === 'sample' && this.player.loaded) {
             this.player.start(time);
-        } else {
+        } else if (this.mode === 'synth') {
             this.synth.triggerAttackRelease("C1", "8n", time, velocity);
         }
     }
@@ -34,8 +37,16 @@ export class KickVoice {
     loadSample(url) {
         this.player.load(url).then(() => {
             this.useSample = true;
+            this.mode = 'sample';
             console.log(`Kick sample loaded: ${url}`);
         }).catch(e => console.error("Failed to load sample", e));
+    }
+
+    setDetune(cents) {
+        this.synth.detune.value = cents;
+        // Use playbackRate for reliable sample pitch shifting
+        const rate = Math.pow(2, cents / 1200);
+        this.player.playbackRate = rate;
     }
 
     setParam(param, value) {

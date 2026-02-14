@@ -3,6 +3,7 @@ import { KickVoice } from './voices/KickVoice';
 import { SnareVoice } from './voices/SnareVoice';
 import { HiHatVoice } from './voices/HiHatVoice';
 import { ResonatorVoice } from './voices/ResonatorVoice';
+import { LiveVoice } from './voices/LiveVoice';
 
 export class AudioEngine {
     // Properties initialized in constructor
@@ -16,84 +17,109 @@ export class AudioEngine {
         this.master = new Tone.Limiter(-1).toDestination();
         this.compressor = new Tone.Compressor(-30, 3).connect(this.master);
 
-        // Master Effects Chain
-        this.monoDelay = new Tone.FeedbackDelay("8n", 0.5);
-        this.stereoDelay = new Tone.PingPongDelay("8n", 0.2); // Initial feedback 0.2, time 8n
+        // Master Recorder
+        this.masterRecorder = new Tone.Recorder();
+        this.master.connect(this.masterRecorder);
 
-        this.reverb = new Tone.Reverb({ decay: 4, wet: 0 }); // Init Reverb
-        this.reverb.generate(); // Pre-calculate impulse response
-
-        // Effects Input - all voices will connect here
-        this.effectsInput = new Tone.Gain(1);
-
-        // Initial delay setup: use monoDelay by default
-        this.delay = this.monoDelay;
-
-        // Chain: effectsInput -> activeDelay -> reverb -> compressor
-        this.pingPongDelay = new Tone.PingPongDelay("8n", 0.5);
-
-        // Route: Input -> Delay (Selected) -> Reverb -> Compressor
-        // By default use Mono
-        this.activeDelay = this.monoDelay;
-
-        this.effectsBus = new Tone.Gain(1);
-        this.effectsBus.connect(this.activeDelay);
-        this.activeDelay.connect(this.reverb);
-        this.reverb.connect(this.compressor);
-
-        // Init state
-        this.monoDelay.wet.value = 0;
-        this.pingPongDelay.wet.value = 0;
-        this.reverb.wet.value = 0; // Ensure reverb wet is also initialized
+        // Per-Track Delays
+        this.trackDelays = {};
+        // We will initialize them in initVoices
 
         this.initVoices();
+
+        // Piano Chain
+        this.pianoSampler = new Tone.Sampler({
+            urls: {
+                C4: "C4.mp3" // Default placeholder, will need a robust default or silence
+            },
+            baseUrl: "https://tonejs.github.io/audio/salamander/", // Use a reliable default for now? Or just empty.
+            onload: () => console.log("Piano Default Loaded")
+        });
+
+        // Effect Chain
+        this.pianoPitch = new Tone.PitchShift(0);
+        this.pianoPanner = new Tone.Panner(0);
+        this.pianoReverb = new Tone.Reverb({ decay: 4, wet: 0 }); // Default dry
+        this.pianoDelay = new Tone.FeedbackDelay("8n", 0.3); // Default dry
+        this.pianoDelay.wet.value = 0;
+
+        // Chain: Sampler -> Pitch -> Panner -> Delay -> Reverb -> Master
+        // (Typically Delay before Reverb or vice versa, user asked for Panner -> Reverb -> Delay, but standard is often Dly->Rev. Let's follow user: Pitch -> Pan -> Reverb -> Delay.)
+
+        // User Order: Sampler -> PitchShift -> Panner -> Reverb -> Delay -> Master
+        this.pianoSampler.connect(this.pianoPitch);
+        this.pianoPitch.connect(this.pianoPanner);
+        this.pianoPanner.connect(this.pianoReverb);
+        this.pianoReverb.connect(this.pianoDelay);
+        this.pianoDelay.connect(this.master); // Bypassing compressor for now or connect to compressor?
+        // Let's connect to compressor to glue it with drums
+        // this.pianoDelay.connect(this.compressor); 
+        // User asked for "Master", which is this.master (Limiter). 
+        // Drums go via Compressor. Let's route Piano to Compressor too for cohesion.
+        this.pianoDelay.disconnect();
+        this.pianoDelay.connect(this.compressor);
+
+        this.pianoVolume = new Tone.Volume(-10);
+        this.pianoSampler.connect(this.pianoVolume); // Wait, if I connect sampler to Pitch, where does Volume go?
+        // Usually Volume is at the end or start. 
+        // Tone.Sampler has .volume, but if we assume "Channel Strip" behavior:
+        // Sampler -> Pitch -> Panner -> Reverb -> Delay -> Volume -> Master
+        // Let's use the Sampler's built-in volume for simplicity, or add a node at the end.
+        // Let's stick to Sampler.volume unless we need post-fx volume. 
+        // User asked "setPianoVolume(db)".
+        this.pianoSampler.volume.value = -10;
 
         // Load Manifest Immediately
         this.sampleManifest = {};
         this.loadManifest();
     }
 
-    togglePingPong(isActive) {
-        this.activeDelay.disconnect();
-
-        // Transfer params
-        const time = this.activeDelay.delayTime.value;
-        const fb = this.activeDelay.feedback.value;
-        const wet = this.activeDelay.wet.value;
-
-        if (isActive) {
-            this.activeDelay = this.pingPongDelay;
-        } else {
-            this.activeDelay = this.monoDelay;
-        }
-
-        this.activeDelay.delayTime.value = time;
-        this.activeDelay.feedback.value = fb;
-        this.activeDelay.wet.value = wet;
-
-        this.effectsBus.disconnect();
-        this.effectsBus.connect(this.activeDelay);
-        this.activeDelay.connect(this.reverb);
-    }
-
-    setDelayTime(val) {
+    setTrackDelayTime(track, val) {
         // Map 0-1 to [16n, 8n, 8n., 4n, 2n]
         const times = ["16n", "8n", "8n.", "4n", "2n"];
         const step = Math.floor(val * (times.length - 1));
-        this.activeDelay.delayTime.value = times[step];
+        if (this.trackDelays[track]) {
+            this.trackDelays[track].delayTime.value = times[step];
+        }
     }
 
-    setFeedback(val) {
-        this.activeDelay.feedback.value = val * 0.9; // Cap at 0.9 to prevent infinite
+    setTrackDelayFeedback(track, val) {
+        if (this.trackDelays[track]) {
+            this.trackDelays[track].feedback.value = val * 0.9;
+        }
     }
 
-    setEffectsMix(amount) {
-        // Control Reverb/Delay Wet amount
+    setTrackDelayWet(track, amount) {
         // 0 -> 0 wet
-        // 1 -> 0.5 wet (Don't go full wet for drums usually)
-        this.activeDelay.wet.value = amount * 0.5;
-        this.reverb.wet.value = amount * 0.4;
+        // 1 -> 0.5 wet
+        if (this.trackDelays[track]) {
+            this.trackDelays[track].wet.value = amount * 0.5;
+        }
     }
+
+    setTrackPitch(track, val) {
+        if (this.voices[track]) {
+            // val is -1200 to 1200 cents
+            const cents = val;
+            if (typeof this.voices[track].setDetune === 'function') {
+                this.voices[track].setDetune(cents);
+            }
+        }
+    }
+
+    setVolume(track, value) {
+        if (this.voices[track] && this.voices[track].output) {
+            let db;
+            if (value <= 0) {
+                db = -Infinity;
+            } else {
+                db = Tone.gainToDb(value / 100);
+            }
+            this.voices[track].output.volume.rampTo(db, 0.1);
+        }
+    }
+
+
 
     async loadManifest() {
         try {
@@ -113,11 +139,38 @@ export class AudioEngine {
 
     loadSample(track, filename) {
         if (this.voices[track]) {
-            // Construct URL - assuming flat structure in public/samples based on manifest
-            // Manifest contains "samples/kicks/filename.wav"
-            const url = `/${filename}`;
-            this.voices[track].loadSample(url);
+            // Check if it's a local blob
+            if (filename.startsWith('blob:')) {
+                // Revoke previous if it exists (not strictly necessary for every load if we manage it elsewhere, 
+                // but good practice if we track it. For now, rely on UI passing unique blob URLs)
+                // Actually, Voice class handles loading.
+                this.voices[track].loadSample(filename);
+            } else {
+                // Construct URL - assuming flat structure in public/samples based on manifest
+                const url = `/${filename}`;
+                this.voices[track].loadSample(url);
+            }
+            // Reset Pitch on Load
+            this.setTrackPitch(track, 0);
         }
+    }
+
+    loadLocalFile(track, file) {
+        if (!file) return;
+
+        // Revoke previous URL if custom property exists on voice
+        if (this.voices[track]._activeBlobUrl) {
+            URL.revokeObjectURL(this.voices[track]._activeBlobUrl);
+        }
+
+        const url = URL.createObjectURL(file);
+        this.voices[track]._activeBlobUrl = url; // Store for cleanup
+        this.voices[track].loadSample(url);
+
+        // Reset Pitch on Load
+        this.setTrackPitch(track, 0);
+
+        return url; // Return to update UI
     }
 
     randomizeSample(track) {
@@ -174,26 +227,129 @@ export class AudioEngine {
     }
 
     initVoices() {
+        const createTrackChain = (voice, name) => {
+            // 1. Create Delay
+            const delay = new Tone.FeedbackDelay("8n", 0.3);
+            delay.wet.value = 0; // Default dry
+            this.trackDelays[name] = delay;
+
+            // 2. Connect Voice -> Delay -> Master Compressor
+            voice.output.connect(delay);
+            delay.connect(this.compressor);
+        };
+
         // Track 1: Kick
         this.voices.kick = new KickVoice();
-        this.voices.kick.output.connect(this.effectsBus); // Route to FX Chain
+        createTrackChain(this.voices.kick, 'kick');
 
         // Track 2: Snare
         this.voices.snare = new SnareVoice();
-        this.voices.snare.output.connect(this.effectsBus);
+        createTrackChain(this.voices.snare, 'snare');
 
         // Track 3: Hi-Hat
         this.voices.hihat = new HiHatVoice();
-        this.voices.hihat.output.connect(this.effectsBus);
+        createTrackChain(this.voices.hihat, 'hihat');
 
         // Track 4: Resonator
         this.voices.resonator = new ResonatorVoice();
-        this.voices.resonator.output.connect(this.effectsBus);
+        createTrackChain(this.voices.resonator, 'resonator');
+
+        // Track 5: Live Recording
+        this.voices.live = new LiveVoice();
+        createTrackChain(this.voices.live, 'live');
     }
 
     trigger(trackName, time, velocity = 1) {
         if (this.voices[trackName]) {
             this.voices[trackName].trigger(time, velocity);
+        }
+    }
+
+    manualTrigger(trackName, velocity = 1) {
+        const now = Tone.now();
+        this.trigger(trackName, now, velocity);
+
+        // Dispatch event for UI feedback (Manual triggers only)
+        const event = new CustomEvent('trackTriggered', { detail: { track: trackName, velocity: velocity } });
+        window.dispatchEvent(event);
+    }
+
+    triggerPianoAttack(note, velocity = 1) {
+        // Use Sampler if available
+        if (this.pianoSampler) {
+            // If loaded, trigger attack
+            if (this.pianoSampler.loaded) {
+                this.pianoSampler.triggerAttack(note, Tone.now(), velocity);
+            } else {
+                // If not loaded, we might want to try anyway or just log/ignore.
+                // Tone.Sampler might handle it gracefully or warn.
+                this.pianoSampler.triggerAttack(note, Tone.now(), velocity);
+            }
+
+            // Dispatch event for UI
+            const event = new CustomEvent('pianoTriggered', { detail: { note: note, type: 'attack' } });
+            window.dispatchEvent(event);
+        }
+    }
+
+    triggerPianoRelease(note) {
+        if (this.pianoSampler) {
+            this.pianoSampler.triggerRelease(note);
+
+            // Dispatch event for UI
+            const event = new CustomEvent('pianoTriggered', { detail: { note: note, type: 'release' } });
+            window.dispatchEvent(event);
+        }
+    }
+
+    setPianoVolume(db) {
+        if (this.pianoSampler) {
+            // db from slider might be -60 to 6.
+            if (db <= -60) this.pianoSampler.volume.rampTo(-Infinity, 0.1);
+            else this.pianoSampler.volume.rampTo(db, 0.1);
+        }
+    }
+
+    setPianoPan(val) {
+        // val -1 to 1
+        if (this.pianoPanner) this.pianoPanner.pan.rampTo(val, 0.1);
+    }
+
+    setPianoPitch(semitones) {
+        // -12 to 12
+        if (this.pianoPitch) {
+            this.pianoPitch.pitch = semitones;
+        }
+    }
+
+    setPianoDelay(wet, time) {
+        if (this.pianoDelay) {
+            this.pianoDelay.wet.value = wet; // 0-1
+
+            if (time !== undefined) {
+                // time might be 0-1 mapped to notes
+                const times = ["16n", "8n", "8n.", "4n", "2n"];
+                const step = Math.floor(time * (times.length - 1));
+                this.pianoDelay.delayTime.value = times[step];
+            }
+        }
+    }
+
+    setPianoReverb(wet) {
+        // wet 0-1
+        if (this.pianoReverb) {
+            // Tone.Reverb wet is normal signal 0-1
+            this.pianoReverb.wet.value = wet;
+        }
+    }
+
+    async loadPianoSample(url) {
+        if (this.pianoSampler) {
+            // We need to reload the sampler or add logic.
+            // Tone.Sampler usage: add(note, url) or new construction.
+            // Replacing standard C4.
+            this.pianoSampler.add("C4", url);
+            console.log("Piano sample loaded:", url);
         }
     }
 
@@ -203,5 +359,122 @@ export class AudioEngine {
 
     stop() {
         this.transport.stop();
+    }
+
+    // --- Recording Logic ---
+
+    async initRecording() {
+        if (!this.mic) {
+            this.mic = new Tone.UserMedia();
+            this.recorder = new Tone.Recorder();
+            this.mic.connect(this.recorder);
+            try {
+                await this.mic.open();
+                console.log("Microphone opened");
+            } catch (e) {
+                console.error("Microphone access failed", e);
+            }
+        }
+    }
+
+    async startRecording() {
+        if (this.recorder && this.recorder.state === 'started') {
+            return this.stopRecording();
+        }
+
+        if (!this.recorder) {
+            await this.initRecording();
+        }
+
+        if (this.recorder && this.recorder.state !== 'started') {
+            // Delay for 500ms to avoid mouse click
+            console.log("Preparing to record...");
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            this.recorder.start();
+            console.log("Recording started...");
+
+            // Auto-stop after 10 seconds
+            this.recordingTimeout = setTimeout(() => {
+                if (this.recorder && this.recorder.state === 'started') {
+                    console.log("Max recording duration reached (10s). Stopping...");
+                    this.stopRecording();
+                    window.dispatchEvent(new Event('recordingStopped'));
+                }
+            }, 10000);
+
+            return 'recording';
+        }
+    }
+
+    async stopRecording() {
+        if (this.recordingTimeout) {
+            clearTimeout(this.recordingTimeout);
+            this.recordingTimeout = null;
+        }
+
+        if (this.recorder && this.recorder.state === 'started') {
+            const blob = await this.recorder.stop();
+            const url = URL.createObjectURL(blob);
+            const buffer = await new Tone.Buffer().load(url);
+
+            // Simple Normalization (Peak)
+            const channel = buffer.toArray(0); // Get Float32Array of channel 0
+            let max = 0;
+            for (let i = 0; i < channel.length; i++) {
+                if (Math.abs(channel[i]) > max) max = Math.abs(channel[i]);
+            }
+            if (max > 0) {
+                const scale = 1 / max;
+                const scaled = channel.map(v => v * scale);
+                buffer.fromArray(scaled); // Re-populate
+            }
+
+            if (this.voices.live) {
+                this.voices.live.setBuffer(buffer);
+            }
+            console.log("Recording stopped. Buffer normalized and set to Live track.");
+
+            // Reset Pitch just in case
+            this.setTrackPitch('live', 0);
+
+            return { state: 'stopped', url: url };
+        }
+        return { state: 'idle' };
+    }
+
+    async startMasterRecording() {
+        if (this.masterRecorder.state !== 'started') {
+            // Delay for 500ms
+            console.log("Preparing Master Recording...");
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            this.masterRecorder.start();
+            console.log("Master Recording Started");
+            return true;
+        }
+        return false;
+    }
+
+    async stopMasterRecording() {
+        if (this.masterRecorder.state === 'started') {
+            const blob = await this.masterRecorder.stop();
+            const url = URL.createObjectURL(blob);
+
+            // Trigger Download
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            a.download = `session_jam_${timestamp}.wav`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            console.log("Master Recording Stopped and Downloaded");
+            return true;
+        }
+        return false;
     }
 }

@@ -2,7 +2,7 @@ import * as Tone from 'tone';
 
 export class SnareVoice {
     constructor() {
-        this.output = new Tone.Gain(1);
+        this.output = new Tone.Volume(0);
 
         // Noise Part (Snap)
         this.noise = new Tone.NoiseSynth({
@@ -34,12 +34,15 @@ export class SnareVoice {
         // Sample Path
         this.player = new Tone.Player().connect(this.output);
         this.useSample = false;
+        this.mode = 'empty';
     }
 
     trigger(time, velocity = 1) {
-        if (this.useSample && this.player.loaded) {
+        if (this.mode === 'empty') return;
+
+        if (this.mode === 'sample' && this.player.loaded) {
             this.player.start(time);
-        } else {
+        } else if (this.mode === 'synth') {
             this.noise.triggerAttackRelease("8n", time, velocity);
             this.osc.triggerAttackRelease("G2", "8n", time, velocity);
         }
@@ -48,6 +51,13 @@ export class SnareVoice {
     loadSample(url) {
         this.player.load(url).then(() => {
             this.useSample = true;
+            this.mode = 'sample';
         });
+    }
+
+    setDetune(cents) {
+        this.osc.detune.value = cents;
+        const rate = Math.pow(2, cents / 1200);
+        this.player.playbackRate = rate;
     }
 }

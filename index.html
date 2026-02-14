@@ -1,36 +1,47 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+
+<head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Drummimasin (4-Track MVP)</title>
-  </head>
-  <body>
-    <div id="app">
-      <header>
-        <h1>DRUMMIMASIN</h1>
-        <div class="tabs">
-          <button id="tab-sequencer" class="active">SEQUENCER</button>
-          <button id="tab-mixer">MIXER</button>
-        </div>
-      </header>
-      
-      <main id="main-content">
-        <!-- Dynamic Content will be injected here -->
-      </main>
+</head>
 
-      <footer>
-        <div class="transport-controls">
-          <button id="play-pause">PLAY</button>
-          <button id="stop">STOP</button>
-          <div class="tempo-control">
-            <label for="bpm">BPM</label>
-            <input type="number" id="bpm" value="120" min="40" max="240">
-          </div>
-        </div>
-      </footer>
+<body>
+    <div id="app">
+        <header>
+            <h1>DRUMMIMASIN</h1>
+            <div class="tabs">
+                <button id="tab-sequencer" class="active">SEQUENCER</button>
+                <button id="tab-mixer">MIXER</button>
+            </div>
+        </header>
+
+        <main id="main-content">
+            <!-- Dynamic Content will be injected here -->
+        </main>
+
+        <footer>
+            <div class="transport-controls">
+                <button id="play-pause">PLAY</button>
+                <button id="stop">STOP</button>
+
+                <div class="session-record" style="display: flex; align-items: center; gap: 10px; margin-left: 20px;">
+                    <button id="session-rec"
+                        style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid #555; background: #333; color: #ff4444; font-weight: bold; cursor: pointer;">REC</button>
+                    <span id="session-timer"
+                        style="font-family: monospace; font-size: 1.2rem; color: #ff4444;">00:00</span>
+                </div>
+
+                <div class="tempo-control">
+                    <label for="bpm">BPM</label>
+                    <input type="number" id="bpm" value="120" min="40" max="240">
+                </div>
+            </div>
+        </footer>
     </div>
     <script type="module" src="/src/main.js"></script>
-  </body>
+</body>
+
 </html>

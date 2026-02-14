@@ -259,6 +259,7 @@ export class AudioEngine {
             const response = await fetch('/samples.json');
             this.sampleManifest = await response.json();
             console.log('Sample Manifest Loaded', this.sampleManifest);
+            window.dispatchEvent(new Event('manifestLoaded'));
         } catch (e) {
             console.error('Failed to load sample manifest', e);
         }
@@ -463,57 +464,72 @@ export class AudioEngine {
         }
     }
 
-    async loadPianoSample(file) {
-        // 1. Memory Management: Revoke old URL if exists
-        if (this.activePianoUrl) {
-            URL.revokeObjectURL(this.activePianoUrl);
-            this.activePianoUrl = null;
-        }
+    async loadPianoPreset(filename) {
+        // Construct ABSOLUTE path to avoid any ambiguity
+        const presetPath = `/samples/piano/presets/${filename}`;
+        const absolutePath = window.location.origin + presetPath;
 
-        // 2. Create new Blob URL (handle both File/Blob and URL string if passed)
+        console.log("🎹 Attempting to load preset from:", absolutePath);
+
+        await this.loadPianoSample(absolutePath);
+    }
+
+    async loadPianoSample(file) {
+        this.pianoReady = false;
+
+        // 1. Memory Management: Revoke old URL if exists and it was a blob
+        if (this.activePianoUrl && this.activePianoUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(this.activePianoUrl);
+        }
+        this.activePianoUrl = null;
+
+        // 2. Prepare URL
         let url;
         if (file instanceof Blob || file instanceof File) {
             url = URL.createObjectURL(file);
             this.activePianoUrl = url; // Store for cleanup
         } else {
-            url = file; // Assume string URL
+            url = file; // Assume string URL (absolute or relative)
         }
 
-        // 3. Dispose old sampler to free resources
-        this.pianoReady = false;
+        // 3. Dispose old sampler (CRITICAL)
         if (this.pianoSampler) {
+            console.log("🗑️ Disposing old sampler...");
             this.pianoSampler.disconnect();
             this.pianoSampler.dispose();
+            this.pianoSampler = null; // Ensure generic reference is cleared
         }
 
-        console.log("🎹 Loading Piano Sample...", url);
+        console.log("🎹 Creating new Sampler for:", url);
 
-        // 4. Create NEW Sampler
+        // 4. Create NEW Sampler & Connect IMMEDIATELY
         this.pianoSampler = new Tone.Sampler({
             urls: {
-                C3: url // Map root to C3 (Standard for single samples)
+                C3: url // Map root to C3
             },
             onload: () => {
-                console.log("🎹 Piano Sample Loaded & Ready:", url);
+                console.log("✅ New Sampler Ready & Connected:", url);
                 this.pianoReady = true;
+
+                // Visual Feedback?
+                window.dispatchEvent(new Event('pianoReady'));
             },
             onerror: (e) => {
                 console.error("❌ Piano Sample Load Failed:", e);
+                // Fallback?
             }
         });
 
-        // 5. Connect to FX Chain
-        // Chain: Sampler -> Pitch -> Panner ...
+        // 5. Connect to FX Chain (Sampler -> Pitch)
+        // Ensure Pitch node exists
         if (this.pianoPitch) {
             this.pianoSampler.connect(this.pianoPitch);
+            console.log("🔗 Connected Sampler -> PitchShift");
         } else {
-            // Fallback
+            // Fallback to master if chain is broken
+            console.warn("⚠️ Piano FX Chain missing, connecting to Destination");
             this.pianoSampler.toDestination();
         }
-
-        // Restore Volume?
-        // New sampler has default volume 0. We might want to apply existing volume setting.
-        // We'll leave it at default for now or we could store `this.pianoVolValue`.
     }
 
     start() {

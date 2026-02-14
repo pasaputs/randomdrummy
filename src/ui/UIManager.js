@@ -130,6 +130,88 @@ export class UIManager {
         uploadRow.appendChild(fileInput);
         strip.appendChild(uploadRow);
 
+        // PRESET SELECTOR
+        const presetRow = document.createElement('div');
+        presetRow.style.display = 'flex';
+        presetRow.style.marginBottom = '8px';
+
+        const presetSelect = document.createElement('select');
+        presetSelect.style.width = '100%';
+        presetSelect.style.background = '#333';
+        presetSelect.style.color = '#ddd';
+        presetSelect.style.border = '1px solid #444';
+        presetSelect.style.fontSize = '0.7rem';
+        presetSelect.style.padding = '2px';
+        presetSelect.style.borderRadius = '2px';
+
+        // Default Option
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = "";
+        defaultOpt.textContent = "🎹 SELECT PRESET";
+        presetSelect.appendChild(defaultOpt);
+
+        // Populate from Manifest (if available)
+        const populatePresets = () => {
+            // Clear existing options except default
+            while (presetSelect.options.length > 1) {
+                presetSelect.remove(1);
+            }
+
+            const presets = this.audioEngine.sampleManifest && this.audioEngine.sampleManifest.piano ? this.audioEngine.sampleManifest.piano : [];
+
+            presets.forEach(presetPath => {
+                // presetPath might be "piano/presets/filename.wav"
+                // We want to show just filename
+                const filename = presetPath.split('/').pop();
+                const opt = document.createElement('option');
+                opt.value = filename; // We'll pass filename to loadPianoPreset
+                opt.textContent = filename.replace(/\.(wav|mp3)$/i, '');
+                presetSelect.appendChild(opt);
+            });
+
+            // Restore saved preset if exists in new list
+            const saved = localStorage.getItem('drummimasin_piano_preset');
+            if (saved) {
+                // Check if saved exists in options
+                for (let i = 0; i < presetSelect.options.length; i++) {
+                    if (presetSelect.options[i].value === saved) {
+                        presetSelect.value = saved;
+                        break;
+                    }
+                }
+                // If we have a saved preset, we might want to load it automatically if not loaded?
+                // But AudioEngine doesn't auto-load it on init yet.
+                // Let's safe-guard: if AudioEngine has no active piano url, maybe load it?
+                // But be careful not to trigger double loads.
+            }
+        };
+
+        // Initial Populate
+        populatePresets();
+
+        // Listen for updates
+        window.addEventListener('manifestLoaded', () => {
+            console.log("UI: Manifest Loaded Event Received. Updating Presets.");
+            populatePresets();
+        });
+
+        // Persistence
+        const savedPreset = localStorage.getItem('drummimasin_piano_preset');
+        if (savedPreset) {
+            presetSelect.value = savedPreset;
+        }
+
+        presetSelect.onchange = (e) => {
+            const val = e.target.value;
+            if (val) {
+                this.audioEngine.loadPianoPreset(val);
+                localStorage.setItem('drummimasin_piano_preset', val);
+            }
+        };
+
+        presetRow.appendChild(presetSelect);
+        strip.appendChild(presetRow);
+
         // Helper for Knobs/Sliders
         const createControl = (label, type, min, max, val, callback) => {
             const wrap = document.createElement('div');

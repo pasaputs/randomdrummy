@@ -57,5 +57,28 @@
     "samples/808/808 (7).wav",
     "samples/808/808 (8).wav",
     "samples/808/808 (9).wav"
+  ],
+  "piano": [
+    "samples/piano/presets/Automation.wav",
+    "samples/piano/presets/Buzzfeed.wav",
+    "samples/piano/presets/Chinese.wav",
+    "samples/piano/presets/Drop.wav",
+    "samples/piano/presets/Horse.wav",
+    "samples/piano/presets/Kruger.wav",
+    "samples/piano/presets/LilUzi.wav",
+    "samples/piano/presets/Low.wav",
+    "samples/piano/presets/OmgRonny.wav",
+    "samples/piano/presets/Palace.wav",
+    "samples/piano/presets/Phonky.wav",
+    "samples/piano/presets/Portal.wav",
+    "samples/piano/presets/Repeater.wav",
+    "samples/piano/presets/Rooster.wav",
+    "samples/piano/presets/Sauce.wav",
+    "samples/piano/presets/School.wav",
+    "samples/piano/presets/Slowdown.wav",
+    "samples/piano/presets/Stfu.wav",
+    "samples/piano/presets/Travis.wav",
+    "samples/piano/presets/Vibes.wav",
+    "samples/piano/presets/Voyage.wav"
   ]
 }

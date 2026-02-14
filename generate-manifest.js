@@ -8,7 +8,8 @@ const mapping = {
     kick: 'kicks',
     snare: 'snare',
     hihat: 'hi hats',
-    resonator: '808'
+    resonator: '808',
+    piano: 'piano/presets'
 };
 
 const manifest = {};

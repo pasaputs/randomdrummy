@@ -79,7 +79,7 @@ export class Sequencer {
             }, time);
         }
 
-        this.currentStep++;
+        this.currentStep = (this.currentStep + 1) % this.steps;
     }
 
     setRemixAmount(val) {

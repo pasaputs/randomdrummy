@@ -237,7 +237,8 @@ export class AudioEngine {
     async init() {
         await Tone.start();
         console.log('Audio Context Started');
-        this.setupMIDI();
+        console.log('Audio Context Started');
+        // this.setupMIDI(); // Moved to MIDIController
     }
 
     loadSample(track, filename) {
@@ -292,42 +293,19 @@ export class AudioEngine {
         ['kick', 'snare', 'hihat', 'resonator'].forEach(track => this.randomizeSample(track));
     }
 
-    setupMIDI() {
-        if (navigator.requestMIDIAccess) {
-            navigator.requestMIDIAccess().then(midiAccess => {
-                const inputs = midiAccess.inputs.values();
-                for (let input of inputs) {
-                    input.onmidimessage = (msg) => this.handleMIDIMessage(msg);
-                }
-                midiAccess.onstatechange = (e) => {
-                    if (e.port.type === 'input' && e.port.state === 'connected') {
-                        e.port.onmidimessage = (msg) => this.handleMIDIMessage(msg);
-                    }
-                };
-            }).catch(e => console.warn("MIDI Access Failed", e));
-        }
-    }
+    // --- MIDI Helper ---
+    // Moved MIDI logic to MIDIController.js
 
-    handleMIDIMessage(msg) {
-        const [status, note, velocity] = msg.data;
-        // Note On (channel 1-16): 0x90-0x9F. velocity > 0
-        if ((status & 0xF0) === 0x90 && velocity > 0) {
-            this.triggerFromMIDI(note, velocity);
-        }
-    }
-
-    triggerFromMIDI(note, velocity) {
+    triggerDrum(trackName, velocity = 1) {
         const now = Tone.now();
-        const vel = velocity / 127;
-        switch (note) {
-            case 36: this.trigger('kick', now, vel); break; // C1
-            case 38: this.trigger('snare', now, vel); break; // D1
-            case 42: this.trigger('hihat', now, vel); break; // F#1
-            case 41: // F1 (Low Tom typically) or
-            case 48: // C2
-                this.trigger('resonator', now, vel); break;
-        }
+        this.trigger(trackName, now, velocity);
+
+        // Dispatch UI event (same as manualTrigger but from MIDI)
+        const event = new CustomEvent('trackTriggered', { detail: { track: trackName, velocity: velocity } });
+        window.dispatchEvent(event);
     }
+
+
 
     initVoices() {
         const createTrackChain = (voice, name) => {

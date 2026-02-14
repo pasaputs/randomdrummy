@@ -233,3 +233,52 @@ input[type=range].vertical {
     border-color: #FFD700;
     font-weight: bold;
 }
+
+// Unified 32-Step Grid Styles
+.steps-container {
+    display: grid;
+    grid-template-columns: repeat(32, 1fr);
+    /* Exactly 32 columns */
+    gap: 1px;
+    /* Minimal gap for a solid look */
+    width: 100%;
+    height: 40px;
+    background: #2e2e2e;
+}
+
+.step-btn {
+    width: 100%;
+    height: 100%;
+    background: #444;
+    border: none;
+    cursor: pointer;
+    transition: background 0.1s;
+
+    &:hover {
+        background: lighten(#444, 5%);
+    }
+
+    &.bar-2 {
+        background: #3a3a3a;
+
+        &:hover {
+            background: lighten(#3a3a3a, 5%);
+        }
+    }
+
+    &.active {
+        background: $accent-color !important;
+    }
+
+    &.beat-start {
+        border-left: 1px solid #666;
+        /* Subtle subdivision marking */
+    }
+
+    &.playing {
+        border: 2px solid #fff;
+        /* Highlight playing step */
+        z-index: 1;
+        /* Ensure border is visible */
+    }
+}

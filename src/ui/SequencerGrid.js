@@ -17,10 +17,10 @@ export class SequencerGrid {
         wrapper.className = 'sequencer-grid';
         wrapper.style.display = 'grid';
 
-        // Grid Template: Label (sticky) + 32 Steps + Dice + Mute + Solo
-        // We'll make the label sticky so it stays visible while scrolling steps
-        wrapper.style.gridTemplateColumns = '100px repeat(32, 40px) 40px 30px 30px';
-        wrapper.style.gap = '2px';
+        // Grid Template: Label | Steps | Dice | Mute | Solo
+        // Steps column will take remaining space.
+        wrapper.style.gridTemplateColumns = '100px 1fr 40px 30px 30px';
+        wrapper.style.gap = '5px';
         wrapper.style.padding = '10px';
         wrapper.style.minWidth = 'fit-content';
 
@@ -33,58 +33,50 @@ export class SequencerGrid {
             label.style.fontWeight = 'bold';
             label.style.position = 'sticky';
             label.style.left = '0';
-            label.style.background = '#2e2e2e'; // Match bg to cover scrolling steps
+            label.style.background = '#2e2e2e'; // Match bg
             label.style.zIndex = '10';
             label.style.paddingRight = '10px';
             wrapper.appendChild(label);
 
-            // 2. Steps (1-32)
+            // 2. Steps Container (1-32)
+            const stepsContainer = document.createElement('div');
+            stepsContainer.className = 'steps-container';
+            // CSS will handle grid-template-columns: repeat(32, 1fr)
+
             for (let i = 0; i < 32; i++) {
                 const btn = document.createElement('button');
                 btn.className = 'step-btn';
                 btn.dataset.track = track;
                 btn.dataset.step = i;
-                btn.style.width = '100%';
-                btn.style.height = '40px'; // Fixed height
-                btn.style.background = '#444';
-                btn.style.border = '1px solid #555';
-                btn.style.cursor = 'pointer';
                 btn.title = `Step ${i + 1}`;
 
-                // Visual Divider after step 16 (index 15)
-                if (i === 16) {
-                    btn.style.marginLeft = '10px'; // Visual gap
+                // No visual divider margin logic here anymore - strictly grid
+                // We can add "group" classes if we want CSS delimiters
+                if (i % 4 === 0 && i !== 0) {
+                    // Maybe add a class for start of beat?
+                    btn.classList.add('beat-start');
                 }
 
-                // Color change for second bar (17-32) logic if desired?
-                // "Add a visual divider or slight color change"
-                // Let's darken the second bar slightly 
+                // Color change logic (Visual feedback only)
                 if (i >= 16) {
-                    btn.style.background = '#3a3a3a';
+                    btn.classList.add('bar-2');
                 }
 
-                // Active state check
+                // Active state
                 if (this.sequencer.pattern[track][i]) {
                     btn.classList.add('active');
-                    btn.style.background = '#ff7f50'; // Accent color
                 }
 
-                btn.addEventListener('click', () => {
+                btn.onclick = () => {
                     const isActive = this.sequencer.toggleStep(track, i);
-                    if (isActive) {
-                        btn.classList.add('active');
-                        btn.style.background = '#ff7f50';
-                    } else {
-                        btn.classList.remove('active');
-                        // Restore bg based on bar
-                        btn.style.background = (i >= 16) ? '#3a3a3a' : '#444';
-                    }
-                });
+                    btn.classList.toggle('active', isActive);
+                };
 
-                wrapper.appendChild(btn);
+                stepsContainer.appendChild(btn);
             }
+            wrapper.appendChild(stepsContainer);
 
-            // 3. Dice (Randomize)
+            // 3. Dice
             const diceBtn = document.createElement('button');
             diceBtn.textContent = '🎲';
             diceBtn.className = 'dice-btn';
@@ -95,7 +87,7 @@ export class SequencerGrid {
             };
             wrapper.appendChild(diceBtn);
 
-            // 4. Mute Button
+            // 4. Mute
             const muteBtn = document.createElement('button');
             muteBtn.textContent = 'M';
             muteBtn.className = 'mute-btn';
@@ -106,7 +98,7 @@ export class SequencerGrid {
             };
             wrapper.appendChild(muteBtn);
 
-            // 5. Solo Button
+            // 5. Solo
             const soloBtn = document.createElement('button');
             soloBtn.textContent = 'S';
             soloBtn.className = 'solo-btn';
@@ -114,10 +106,7 @@ export class SequencerGrid {
             soloBtn.onclick = () => {
                 this.sequencer.soloStates[track] = !this.sequencer.soloStates[track];
                 soloBtn.classList.toggle('active-solo');
-                // We might need to refresh all solo buttons if we wanted exclusive solo visual feedback logic, 
-                // but checking state on render or tick is enough for audio. 
-                // However, visual feedback of other tracks being 'dimmed' is not requested, simply S button active.
-                this.render(); // Re-render to ensure consistency if needed? Not strictly necessary if just toggling class, but good if we had inter-track dependencies.
+                this.render();
             };
             wrapper.appendChild(soloBtn);
         });

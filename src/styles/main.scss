@@ -141,14 +141,12 @@ footer {
 }
 
 // Fix for vertical sliders warning
-input[type=range][orient=vertical] {
-    writing-mode: bt-lr;
-    /* IE */
-    -webkit-appearance: slider-vertical;
-    /* WebKit */
-    width: 8px;
-    height: 100%;
-    padding: 0 5px;
+input[type=range].vertical {
+    writing-mode: vertical-lr;
+    direction: rtl;
+    vertical-align: bottom;
+    width: 20px;
+    /* Ensure width is sufficient */
 }
 
 // Standard compliant way for future (if Mixer uses a specific class)

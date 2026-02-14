@@ -4,7 +4,7 @@ export class Sequencer {
     constructor(audioEngine) {
         this.audioEngine = audioEngine;
         this.steps = 32;
-        this.tracks = ['kick', 'snare', 'hihat', 'resonator', 'live'];
+        this.tracks = ['kick', 'snare', 'hihat', 'resonator', 'live', 'pianoloop'];
 
         // logic: pattern[trackIndex][stepIndex] = true/false (or velocity)
         this.pattern = {
@@ -12,7 +12,8 @@ export class Sequencer {
             snare: new Array(32).fill(false),
             hihat: new Array(32).fill(false),
             resonator: new Array(32).fill(false),
-            live: new Array(32).fill(false)
+            live: new Array(32).fill(false),
+            pianoloop: new Array(32).fill(false)
         };
 
         this.isPlaying = false;

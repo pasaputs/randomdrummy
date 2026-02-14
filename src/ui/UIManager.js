@@ -129,7 +129,16 @@ export class UIManager {
         uploadBtn.style.cssText = btnStyle;
         uploadBtn.onclick = () => fileInput.click();
 
+        uploadBtn.onclick = () => fileInput.click();
+
         uploadRow.appendChild(uploadBtn);
+
+        uploadBtn.onclick = () => fileInput.click();
+
+        uploadRow.appendChild(uploadBtn);
+
+        // Resample Button Removed (Moved to Mixer Track "Pianoloop")
+
         // Add hidden input
         uploadRow.appendChild(fileInput);
         strip.appendChild(uploadRow);

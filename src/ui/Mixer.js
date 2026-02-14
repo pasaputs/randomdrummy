@@ -25,7 +25,7 @@ export class Mixer {
         wrapper.style.padding = '20px';
         wrapper.style.height = '100%';
 
-        const tracks = ['kick', 'snare', 'hihat', 'resonator', 'live'];
+        const tracks = ['kick', 'snare', 'hihat', 'resonator', 'live', 'pianoloop'];
 
         tracks.forEach(track => {
             const strip = document.createElement('div');
@@ -163,6 +163,66 @@ export class Mixer {
                 });
 
                 headerRow.appendChild(recBtn);
+            } else if (track === 'pianoloop') {
+                // SPECIAL REC LOGIC FOR PIANO LOOP
+                const recBtn = document.createElement('button');
+                recBtn.textContent = 'REC';
+                recBtn.style.color = '#ff4444';
+                recBtn.style.background = '#333';
+                recBtn.style.border = '1px solid #555';
+                recBtn.style.borderRadius = '4px';
+                recBtn.style.fontSize = '0.7rem';
+                recBtn.style.padding = '2px 6px';
+                recBtn.style.cursor = 'pointer';
+
+                recBtn.onclick = async () => {
+                    // Visuals: Blinking Red immediately to indicate "Request Sent/Recording"
+                    recBtn.style.animation = 'pulse 0.5s infinite alternate';
+
+                    const status = await this.audioEngine.recordInternalPiano();
+
+                    if (status === 'recording') {
+                        recBtn.style.background = 'red';
+                        recBtn.style.color = 'white';
+                        recBtn.textContent = 'STOP';
+                        // Animation continues
+                    } else {
+                        // STOPPED
+                        recBtn.style.animation = 'none';
+                        recBtn.style.background = '#333';
+                        recBtn.style.color = '#ff4444';
+                        recBtn.textContent = 'REC';
+
+                        // Visual Feedback: Track Loaded
+                        // Find the label in this headerRow (it's the first child)
+                        const trackLabel = headerRow.querySelector('div');
+                        if (trackLabel) {
+                            trackLabel.style.color = '#4caf50'; // Green
+                            trackLabel.textContent = "PIANOLOOP (LOADED)";
+                            // Reset after 3s? Or keep it? User said "Change track label... to indicate 'Loop Loaded'"
+                            // Loop Loaded persists until typical reset.
+                        }
+                        // Auto-trigger Step 1 (index 0)
+                        if (window.audioEngine.sequencer) {
+                            window.audioEngine.sequencer.pattern['pianoloop'][0] = true;
+
+                            // REFRESH GRID UI
+                            if (window.ui && window.ui.grid && typeof window.ui.grid.render === 'function') {
+                                window.ui.grid.render();
+                            } else {
+                                // Fallback: try re-rendering the whole UI if grid render not found (unlikely)
+                                console.log("Grid render not found, relying on next step update.");
+                            }
+
+                            // If playing, it will pick up next cycle.
+                            // User: "If the sequencer is playing, it should start looping from the next cycle."
+                            // This is automatic if we set the pattern step. 
+                            // But if we are PAST step 0, it waits for wrap around.
+                            // Perfect.
+                        }
+                    }
+                };
+                headerRow.appendChild(recBtn);
 
             } else {
                 const dice = document.createElement('button');
@@ -198,7 +258,7 @@ export class Mixer {
 
             // Select
             const select = document.createElement('select');
-            if (track === 'live') {
+            if (track === 'live' || track === 'pianoloop') {
                 select.style.display = 'none'; // logic from before
             }
             select.style.flexGrow = '1';
@@ -389,9 +449,10 @@ export class Mixer {
             volIn.type = 'range';
             volIn.min = 0; volIn.max = 100; volIn.value = 80;
             // Vertical styling
-            volIn.style.writingMode = 'bt-lr';
-            volIn.setAttribute('orient', 'vertical');
-            volIn.style.appearance = 'slider-vertical';
+            volIn.classList.add('vertical');
+            volIn.setAttribute('orient', 'vertical'); // Keep for accessibility/compatibility
+            // volIn.style.writingMode = 'bt-lr'; // Moved to CSS
+            // volIn.style.appearance = 'slider-vertical'; // Moved to CSS
             volIn.style.width = '20px';
             volIn.style.height = '120px'; // Taller
             volIn.style.marginTop = '10px';

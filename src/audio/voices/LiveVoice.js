@@ -14,13 +14,27 @@ export class LiveVoice {
     }
 
     trigger(time, velocity = 1) {
-        if (this.buffer && this.player.loaded) {
+        if (this.player && this.player.loaded) {
             this.player.start(time);
+            console.log("🔊 Playing PIANOLOOP at", time); // Commented out to reduce spam, but verify functionality
+        } else if (this.buffer) {
+            // Fallback if loaded is false but we set buffer manually?
+            // Tone.Player should be loaded if buffer is set.
         }
     }
 
     setDetune(cents) {
         const rate = Math.pow(2, cents / 1200);
         this.player.playbackRate = rate;
+    }
+
+    async loadSample(url) {
+        await this.player.load(url);
+        this.player.loop = false; // Sequencer triggers it, so internal loop is false
+        console.log("Live Voice Loaded with new Loop:", url);
+    }
+
+    async load(url) {
+        await this.loadSample(url);
     }
 }

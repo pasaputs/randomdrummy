@@ -14,6 +14,7 @@ const keyboard = new KeyboardController(engine);
 // Expose for Global Access (Spacebar Logic)
 window.audioEngine = engine;
 window.audioEngine.sequencer = sequencer;
+window.ui = ui;
 
 // Initialize Sequencer Loop
 sequencer.init();

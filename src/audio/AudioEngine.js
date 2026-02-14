@@ -47,31 +47,56 @@ export class AudioEngine {
         // (Typically Delay before Reverb or vice versa, user asked for Panner -> Reverb -> Delay, but standard is often Dly->Rev. Let's follow user: Pitch -> Pan -> Reverb -> Delay.)
 
         // User Order: Sampler -> PitchShift -> Panner -> Reverb -> Delay -> Master
+        // User Order: Sampler -> PitchShift -> Panner -> Reverb -> Delay -> Volume -> Master
         this.pianoSampler.connect(this.pianoPitch);
         this.pianoPitch.connect(this.pianoPanner);
         this.pianoPanner.connect(this.pianoReverb);
         this.pianoReverb.connect(this.pianoDelay);
-        this.pianoDelay.connect(this.master); // Bypassing compressor for now or connect to compressor?
-        // Let's connect to compressor to glue it with drums
-        // this.pianoDelay.connect(this.compressor); 
-        // User asked for "Master", which is this.master (Limiter). 
-        // Drums go via Compressor. Let's route Piano to Compressor too for cohesion.
-        this.pianoDelay.disconnect();
-        this.pianoDelay.connect(this.compressor);
 
+        // Volume Control (End of Chain)
         this.pianoVolume = new Tone.Volume(-10);
-        this.pianoSampler.connect(this.pianoVolume); // Wait, if I connect sampler to Pitch, where does Volume go?
-        // Usually Volume is at the end or start. 
-        // Tone.Sampler has .volume, but if we assume "Channel Strip" behavior:
-        // Sampler -> Pitch -> Panner -> Reverb -> Delay -> Volume -> Master
-        // Let's use the Sampler's built-in volume for simplicity, or add a node at the end.
-        // Let's stick to Sampler.volume unless we need post-fx volume. 
-        // User asked "setPianoVolume(db)".
-        this.pianoSampler.volume.value = -10;
+        this.pianoDelay.connect(this.pianoVolume);
+
+        // Connect Volume to Master (Compressor)
+        this.pianoVolume.connect(this.compressor);
+
+        // Resampling Recorder (LOOP 2M)
+        this.pianoRecorder = new Tone.Recorder();
+        this.pianoVolume.connect(this.pianoRecorder);
+
+        // Internal Recorder (Track 6 - PIANOLOOP)
+        this.pianoInternalRecorder = new Tone.Recorder();
+        this.pianoVolume.connect(this.pianoInternalRecorder);
 
         // Load Manifest Immediately
         this.sampleManifest = {};
         this.loadManifest();
+    }
+
+    async recordInternalPiano() {
+        if (this.pianoInternalRecorder.state !== 'started') {
+            // 1. CLEAR previous recording to free memory
+            this.pianoInternalRecorder.start();
+            console.log("⏺️ Internal Recording (PianoInternalRecorder)...");
+            return 'recording';
+        } else {
+            // 2. STOP & CAPTURE
+            const blob = await this.pianoInternalRecorder.stop();
+            const url = URL.createObjectURL(blob);
+
+            // 3. FORCE LOAD into PIANOLOOP voice
+            if (this.voices.pianoloop) {
+                // Ensure the voice is ready for a new buffer
+                // Calling load (or loadSample)
+                if (typeof this.voices.pianoloop.load === 'function') {
+                    await this.voices.pianoloop.load(url);
+                } else {
+                    await this.voices.pianoloop.loadSample(url);
+                }
+                console.log("✅ Audio loaded to PIANOLOOP track");
+            }
+            return 'stopped';
+        }
     }
 
     setTrackDelayTime(track, val) {
@@ -119,7 +144,54 @@ export class AudioEngine {
         }
     }
 
+    setPianoVolume(db) {
+        if (this.pianoVolume) {
+            if (db <= -60) this.pianoVolume.volume.rampTo(-Infinity, 0.1);
+            else this.pianoVolume.volume.rampTo(db, 0.1);
+        }
+    }
 
+    setPianoPan(val) {
+        // val -1 to 1
+        if (this.pianoPanner) {
+            this.pianoPanner.pan.rampTo(val, 0.1);
+        }
+    }
+
+    setPianoReverbWet(val) {
+        if (this.pianoReverb) {
+            this.pianoReverb.wet.rampTo(val, 0.1);
+        }
+    }
+
+    setPianoDelayWet(val) {
+        if (this.pianoDelay) {
+            this.pianoDelay.wet.rampTo(val, 0.1);
+        }
+    }
+
+    setPianoDelayTime(val) {
+        // Map 0-1 to [16n, 8n, 8n., 4n, 2n]
+        const times = ["16n", "8n", "8n.", "4n", "2n"];
+        const step = Math.floor(val * (times.length - 1));
+        if (this.pianoDelay) {
+            this.pianoDelay.delayTime.value = times[step];
+        }
+    }
+
+    setPianoDelayFeedback(val) {
+        if (this.pianoDelay) {
+            this.pianoDelay.feedback.value = val * 0.9; // Max feedback 0.9 to prevent runaway
+        }
+    }
+
+    setPianoPitch(val) {
+        // val is -1200 to 1200 cents
+        const cents = val;
+        if (this.pianoPitch) {
+            this.pianoPitch.detune.rampTo(cents, 0.1);
+        }
+    }
 
     async loadManifest() {
         try {
@@ -257,6 +329,10 @@ export class AudioEngine {
         // Track 5: Live Recording
         this.voices.live = new LiveVoice();
         createTrackChain(this.voices.live, 'live');
+
+        // Track 6: Piano Loop (Internal Recording)
+        this.voices.pianoloop = new LiveVoice();
+        createTrackChain(this.voices.pianoloop, 'pianoloop');
     }
 
     trigger(trackName, time, velocity = 1) {

@@ -392,6 +392,9 @@ export class AudioEngine {
     }
 
     triggerPianoAttack(note, velocity = 1) {
+        // Safety Check
+        if (!this.pianoReady && !this.pianoSampler) return;
+
         // Use Sampler if available
         if (this.pianoSampler) {
             // If loaded, trigger attack
@@ -460,14 +463,57 @@ export class AudioEngine {
         }
     }
 
-    async loadPianoSample(url) {
-        if (this.pianoSampler) {
-            // We need to reload the sampler or add logic.
-            // Tone.Sampler usage: add(note, url) or new construction.
-            // Replacing standard C4.
-            this.pianoSampler.add("C4", url);
-            console.log("Piano sample loaded:", url);
+    async loadPianoSample(file) {
+        // 1. Memory Management: Revoke old URL if exists
+        if (this.activePianoUrl) {
+            URL.revokeObjectURL(this.activePianoUrl);
+            this.activePianoUrl = null;
         }
+
+        // 2. Create new Blob URL (handle both File/Blob and URL string if passed)
+        let url;
+        if (file instanceof Blob || file instanceof File) {
+            url = URL.createObjectURL(file);
+            this.activePianoUrl = url; // Store for cleanup
+        } else {
+            url = file; // Assume string URL
+        }
+
+        // 3. Dispose old sampler to free resources
+        this.pianoReady = false;
+        if (this.pianoSampler) {
+            this.pianoSampler.disconnect();
+            this.pianoSampler.dispose();
+        }
+
+        console.log("🎹 Loading Piano Sample...", url);
+
+        // 4. Create NEW Sampler
+        this.pianoSampler = new Tone.Sampler({
+            urls: {
+                C3: url // Map root to C3 (Standard for single samples)
+            },
+            onload: () => {
+                console.log("🎹 Piano Sample Loaded & Ready:", url);
+                this.pianoReady = true;
+            },
+            onerror: (e) => {
+                console.error("❌ Piano Sample Load Failed:", e);
+            }
+        });
+
+        // 5. Connect to FX Chain
+        // Chain: Sampler -> Pitch -> Panner ...
+        if (this.pianoPitch) {
+            this.pianoSampler.connect(this.pianoPitch);
+        } else {
+            // Fallback
+            this.pianoSampler.toDestination();
+        }
+
+        // Restore Volume?
+        // New sampler has default volume 0. We might want to apply existing volume setting.
+        // We'll leave it at default for now or we could store `this.pianoVolValue`.
     }
 
     start() {

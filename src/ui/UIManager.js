@@ -111,8 +111,10 @@ export class UIManager {
         fileInput.onchange = (e) => {
             const file = e.target.files[0];
             if (file) {
-                const url = URL.createObjectURL(file);
-                this.audioEngine.loadPianoSample(url);
+                if (file) {
+                    // Pass File object directly to AudioEngine
+                    this.audioEngine.loadPianoSample(file);
+                }
             }
         };
 

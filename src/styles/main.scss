@@ -282,3 +282,17 @@ input[type=range].vertical {
         /* Ensure border is visible */
     }
 }
+
+#mixer-container,
+.mixer-container {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    max-height: 100vh;
+    padding-bottom: 50px;
+
+    .mixer-grid {
+        min-width: fit-content;
+        padding-bottom: 20px;
+    }
+}

@@ -17,6 +17,12 @@ export class Mixer {
     }
 
     render() {
+        // Cleanup old listeners
+        if (this._pianoStateListeners) {
+            this._pianoStateListeners.forEach(l => window.removeEventListener(l.type, l.handler));
+        }
+        this._pianoStateListeners = [];
+
         this.container.innerHTML = '';
         const wrapper = document.createElement('div');
         wrapper.className = 'mixer-grid';
@@ -25,9 +31,10 @@ export class Mixer {
         wrapper.style.padding = '20px';
         wrapper.style.height = '100%';
 
-        const tracks = ['kick', 'snare', 'hihat', 'resonator', 'live', 'pianoloop'];
+        const tracks = ['kick', 'snare', 'hihat', 'resonator', 'live', 'live2', 'pianoloop', 'pianoloop2'];
 
         tracks.forEach(track => {
+            console.log("Rendering controls for:", track);
             const strip = document.createElement('div');
             strip.setAttribute('data-track', track);
             strip.className = 'channel-strip';
@@ -58,7 +65,7 @@ export class Mixer {
             label.style.fontSize = '0.9rem';
             headerRow.appendChild(label);
 
-            if (track === 'live') {
+            if (track === 'live' || track === 'live2') {
                 // REC Logic
                 const recContainer = document.createElement('div');
                 recContainer.style.display = 'flex';
@@ -74,51 +81,7 @@ export class Mixer {
                 recBtn.style.fontSize = '0.7rem';
                 recBtn.style.padding = '2px 6px';
                 recBtn.style.cursor = 'pointer';
-
-                // Rec State Logic (Simplified from previous, merging cleanly)
-                // We need to preserve the complex logic if possible, or re-implement simply.
-                // Re-implementing specific UI feedback for REC:
-                const startRec = () => {
-                    recBtn.style.background = 'red';
-                    recBtn.style.color = 'white';
-                    this.audioEngine.startRecording();
-                };
-                const stopRec = () => {
-                    recBtn.style.background = '#333';
-                    recBtn.style.color = '#ff4444';
-                    // Check if we need to show download link etc?
-                    // For now, adhere to "Hold to Record" request or Toggle?
-                    // Previous code was Toggle? No, "Hold to Record" in previous block provided by user in prompt 1, 
-                    // but implemented as Toggle in prompt 2?
-                    // Prompt 2: "REC button now toggles...". 
-                    // This request text says: "Dice/Rec Button".
-                    // Let's stick to the TOGGLE logic we implemented earlier if we can find it?
-                    // Actually, the code I'm replacing had "Hold to Record" logic (mousedown/up). 
-                    // Wait, I might have overwritten the Toggle logic in a previous step?
-                    // Let's look at the code I read in Step 543/591. 
-                    // Lines 72-83: "Hold to Record Logic". 
-                    // Okay, so the logic currently IS Hold. I will preserve Hold.
-                    this.audioEngine.stopRecording();
-                };
-
-                recBtn.addEventListener('mousedown', startRec);
-                recBtn.addEventListener('mouseup', stopRec);
-                recBtn.addEventListener('mouseleave', stopRec);
-                recBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startRec(); });
-                recBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopRec(); });
-
-                // We also had a download link and progress bar in the "Restoring File Uploads" step (Step 546-554).
-                // Did that get applied? 
-                // Step 554 applied changes to Mixer.js.
-                // But the View in Step 591 shows "Hold to Record" logic.
-                // It seems my previous big replace in Step 554 might have FAILED or was overwritten?
-                // Step 555 returned "target content not found".
-                // So the "Restoring File Uploads" and "Toggle Rec" logic WAS NOT APPLIED correctly.
-                // I need to be careful here. I will implement the layout requested NOW.
-                // I will stick to "Hold to Record" as seen in current file, to be safe, unless User specifically asked for Toggle in history. 
-                // User history says "Enhanced Live Recording (Completed) ... Toggle Logic". 
-                // So I SHOULD have Toggle. 
-                // Since I am rewriting the whole block, I will re-implement TOGGLE logic here.
+                recBtn.id = `rec-btn-${track}`;
 
                 let isRecording = false;
                 recBtn.onclick = async () => {
@@ -128,7 +91,7 @@ export class Mixer {
                         recBtn.style.background = 'orange';
                         recBtn.style.color = 'black';
 
-                        const res = await this.audioEngine.startRecording();
+                        const res = await this.audioEngine.startRecording(track);
 
                         if (res === 'recording') {
                             isRecording = true;
@@ -137,24 +100,24 @@ export class Mixer {
                             recBtn.style.color = 'white';
                         }
                     } else {
-                        const res = await this.audioEngine.stopRecording();
+                        const res = await this.audioEngine.stopRecording(track);
                         isRecording = false;
                         recBtn.textContent = 'REC';
                         recBtn.style.background = '#333';
                         recBtn.style.color = '#ff4444';
                         if (res.url) {
-                            // minimal download link
-                            const a = document.createElement('a');
-                            a.href = res.url;
-                            a.download = 'recording.wav';
-                            a.click();
+                            // minimal download link (optional, keeping minimal for UI cleanliness)
+                            // const a = document.createElement('a');
+                            // a.href = res.url;
+                            // a.download = `${track}_recording.wav`;
+                            // a.click();
                         }
                     }
                 };
 
                 // Auto-stop listener
-                window.addEventListener('recordingStopped', () => {
-                    if (isRecording) {
+                window.addEventListener('recordingStopped', (e) => {
+                    if (e.detail && e.detail.track === track && isRecording) {
                         isRecording = false;
                         recBtn.textContent = 'REC';
                         recBtn.style.background = '#333';
@@ -163,7 +126,7 @@ export class Mixer {
                 });
 
                 headerRow.appendChild(recBtn);
-            } else if (track === 'pianoloop') {
+            } else if (track === 'pianoloop' || track === 'pianoloop2') {
                 // SPECIAL REC LOGIC FOR PIANO LOOP
                 const recBtn = document.createElement('button');
                 recBtn.textContent = 'REC';
@@ -174,54 +137,94 @@ export class Mixer {
                 recBtn.style.fontSize = '0.7rem';
                 recBtn.style.padding = '2px 6px';
                 recBtn.style.cursor = 'pointer';
+                recBtn.style.transition = 'all 0.2s'; // Smooth transition
+                recBtn.id = `rec-btn-${track}`;
 
-                recBtn.onclick = async () => {
-                    // Visuals: Blinking Red immediately to indicate "Request Sent/Recording"
-                    recBtn.style.animation = 'pulse 0.5s infinite alternate';
-
-                    const status = await this.audioEngine.recordInternalPiano();
-
-                    if (status === 'recording') {
-                        recBtn.style.background = 'red';
-                        recBtn.style.color = 'white';
+                // Helper to update button visuals based on state
+                const updateButtonState = (state) => {
+                    if (state === 'ARMED') {
+                        recBtn.textContent = 'ARM ●';
+                        recBtn.style.background = '#ffb300'; // Amber
+                        recBtn.style.color = 'black';
+                        recBtn.style.borderColor = '#ffca28';
+                        recBtn.style.animation = 'pulse-amber 1s infinite';
+                    } else if (state === 'RECORDING') {
                         recBtn.textContent = 'STOP';
-                        // Animation continues
-                    } else {
-                        // STOPPED
+                        recBtn.style.background = '#d32f2f'; // Red
+                        recBtn.style.color = 'white';
+                        recBtn.style.borderColor = '#ff5252';
                         recBtn.style.animation = 'none';
+                    } else { // IDLE
+                        recBtn.textContent = 'REC';
                         recBtn.style.background = '#333';
                         recBtn.style.color = '#ff4444';
-                        recBtn.textContent = 'REC';
+                        recBtn.style.borderColor = '#555';
+                        recBtn.style.animation = 'none';
+                    }
+                };
 
+                // Inject Keyframes for Pulse if not exists (Idempotent)
+                if (!document.getElementById('anim-pulse-amber')) {
+                    const style = document.createElement('style');
+                    style.id = 'anim-pulse-amber';
+                    style.textContent = `
+                        @keyframes pulse-amber {
+                            0% { box-shadow: 0 0 0 0 rgba(255, 179, 0, 0.7); }
+                            70% { box-shadow: 0 0 0 6px rgba(255, 179, 0, 0); }
+                            100% { box-shadow: 0 0 0 0 rgba(255, 179, 0, 0); }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+
+                recBtn.onclick = async () => {
+                    const result = await this.audioEngine.recordInternalPiano(track);
+
+                    if (result === 'armed') {
+                        updateButtonState('ARMED');
+                    } else if (result === 'idle') {
+                        updateButtonState('IDLE');
+                    } else if (result === 'stopped') {
+                        updateButtonState('IDLE');
                         // Visual Feedback: Track Loaded
-                        // Find the label in this headerRow (it's the first child)
                         const trackLabel = headerRow.querySelector('div');
                         if (trackLabel) {
                             trackLabel.style.color = '#4caf50'; // Green
-                            trackLabel.textContent = "PIANOLOOP (LOADED)";
-                            // Reset after 3s? Or keep it? User said "Change track label... to indicate 'Loop Loaded'"
-                            // Loop Loaded persists until typical reset.
+                            trackLabel.textContent = `${track.toUpperCase()} (LOADED)`;
                         }
-                        // Auto-trigger Step 1 (index 0)
+                        // Refresh Grid
                         if (window.audioEngine.sequencer) {
-                            window.audioEngine.sequencer.pattern['pianoloop'][0] = true;
-
-                            // REFRESH GRID UI
+                            window.audioEngine.sequencer.pattern[track][0] = true;
                             if (window.ui && window.ui.grid && typeof window.ui.grid.render === 'function') {
                                 window.ui.grid.render();
-                            } else {
-                                // Fallback: try re-rendering the whole UI if grid render not found (unlikely)
-                                console.log("Grid render not found, relying on next step update.");
                             }
-
-                            // If playing, it will pick up next cycle.
-                            // User: "If the sequencer is playing, it should start looping from the next cycle."
-                            // This is automatic if we set the pattern step. 
-                            // But if we are PAST step 0, it waits for wrap around.
-                            // Perfect.
                         }
                     }
                 };
+
+                // Listen for Auto-Start event (Triggered by Note)
+                const onStateChange = (e) => {
+                    if (e.detail.track === track && e.detail.state === 'RECORDING') {
+                        updateButtonState('RECORDING');
+                    }
+                };
+                window.addEventListener('pianoRecordStateChanged', onStateChange);
+                // We keep track of one listener for cleanup? 
+                // Since this loop runs for multiple tracks, we might overwrite this._pianoStateListener
+                // We should store active listeners in an array or map?
+                // Or since render() clears basic innerHTML, maybe we don't need to be too aggressive on cleanup if we trust the browser?
+                // "Ensuring proper event listener cleanup" was a requirement.
+                // But we are in a loop now.
+                // Let's add it to a list.
+                if (!this._pianoStateListeners) this._pianoStateListeners = [];
+                this._pianoStateListeners.push({ type: 'pianoRecordStateChanged', handler: onStateChange });
+                // We need to implement cleanup in render() start!
+
+                // Initial State Check
+                if (this.audioEngine.pianoRecordStates && this.audioEngine.pianoRecordStates[track]) {
+                    updateButtonState(this.audioEngine.pianoRecordStates[track]);
+                }
+
                 headerRow.appendChild(recBtn);
 
             } else {
@@ -258,7 +261,7 @@ export class Mixer {
 
             // Select
             const select = document.createElement('select');
-            if (track === 'live' || track === 'pianoloop') {
+            if (track === 'live' || track === 'live2' || track === 'pianoloop' || track === 'pianoloop2') {
                 select.style.display = 'none'; // logic from before
             }
             select.style.flexGrow = '1';
@@ -445,7 +448,7 @@ export class Mixer {
             mixRow.appendChild(panWrap);
 
             // START Offset Slider (Recorded Tracks Only)
-            if (track === 'live' || track === 'pianoloop') {
+            if (track === 'live' || track === 'live2' || track === 'pianoloop' || track === 'pianoloop2') {
                 const startWrap = document.createElement('div');
                 startWrap.style.textAlign = 'center';
                 startWrap.style.marginTop = '10px';

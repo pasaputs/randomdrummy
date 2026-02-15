@@ -17,9 +17,14 @@ export class AudioEngine {
         this.master = new Tone.Limiter(-1).toDestination();
         this.compressor = new Tone.Compressor(-30, 3).connect(this.master);
 
-        // Master Recorder
+        // Master Recorder (Session)
         this.masterRecorder = new Tone.Recorder();
         this.master.connect(this.masterRecorder);
+
+        // Vault Recorder (32-Step Loop)
+        this.vaultRecorder = new Tone.Recorder();
+        this.master.connect(this.vaultRecorder);
+        this.vaultState = 'IDLE'; // IDLE, ARMED, RECORDING
 
         // Per-Track Delays
         this.trackDelays = {};
@@ -66,33 +71,65 @@ export class AudioEngine {
         this.pianoInternalRecorder = new Tone.Recorder();
         this.pianoVolume.connect(this.pianoInternalRecorder);
 
+        // Internal Recorder 2 (Track 8 - PIANOLOOP2)
+        this.pianoInternalRecorder2 = new Tone.Recorder();
+        this.pianoVolume.connect(this.pianoInternalRecorder2);
+
+        // Piano Record State Machine (Per Track)
+        this.pianoRecordStates = {
+            pianoloop: 'IDLE',
+            pianoloop2: 'IDLE'
+        };
+
         // Load Manifest Immediately
         this.sampleManifest = {};
         this.loadManifest();
     }
 
-    async recordInternalPiano() {
-        if (this.pianoInternalRecorder.state !== 'started') {
-            // 1. CLEAR previous recording to free memory
-            this.pianoInternalRecorder.start();
-            console.log("⏺️ Internal Recording (PianoInternalRecorder)...");
-            return 'recording';
-        } else {
-            // 2. STOP & CAPTURE
-            const blob = await this.pianoInternalRecorder.stop();
+    // Internal helper: actually starts the MediaRecorder
+    startPianoRecording(track) {
+        const recorder = (track === 'pianoloop2') ? this.pianoInternalRecorder2 : this.pianoInternalRecorder;
+        if (recorder.state !== 'started') {
+            recorder.start();
+        }
+        this.pianoRecordStates[track] = 'RECORDING';
+        console.log(`⏺️ Internal Recording (${track}) started.`);
+        // Dispatch event with track info
+        window.dispatchEvent(new CustomEvent('pianoRecordStateChanged', {
+            detail: { state: 'RECORDING', track: track }
+        }));
+    }
+
+    // State-machine toggle: IDLE → ARMED → (auto-start on note) → RECORDING → IDLE
+    async recordInternalPiano(track = 'pianoloop') {
+        const state = this.pianoRecordStates[track];
+        const recorder = (track === 'pianoloop2') ? this.pianoInternalRecorder2 : this.pianoInternalRecorder;
+
+        if (state === 'IDLE') {
+            // ARM the recorder — wait for first note
+            this.pianoRecordStates[track] = 'ARMED';
+            console.log(`🔴 Armed (${track}) — Waiting for input...`);
+            return 'armed';
+        } else if (state === 'ARMED') {
+            // Cancel arm
+            this.pianoRecordStates[track] = 'IDLE';
+            console.log(`⬜ Arm cancelled (${track}) — back to IDLE.`);
+            return 'idle';
+        } else if (state === 'RECORDING') {
+            // STOP & CAPTURE
+            const blob = await recorder.stop();
             const url = URL.createObjectURL(blob);
 
-            // 3. FORCE LOAD into PIANOLOOP voice
-            if (this.voices.pianoloop) {
-                // Ensure the voice is ready for a new buffer
-                // Calling load (or loadSample)
-                if (typeof this.voices.pianoloop.load === 'function') {
-                    await this.voices.pianoloop.load(url);
+            // FORCE LOAD into correct voice
+            if (this.voices[track]) {
+                if (typeof this.voices[track].load === 'function') {
+                    await this.voices[track].load(url);
                 } else {
-                    await this.voices.pianoloop.loadSample(url);
+                    await this.voices[track].loadSample(url);
                 }
-                console.log("✅ Audio loaded to PIANOLOOP track");
+                console.log(`✅ Audio loaded to ${track.toUpperCase()} track`);
             }
+            this.pianoRecordStates[track] = 'IDLE';
             return 'stopped';
         }
     }
@@ -368,13 +405,21 @@ export class AudioEngine {
         this.voices.resonator = new ResonatorVoice();
         createTrackChain(this.voices.resonator, 'resonator');
 
-        // Track 5: Live Recording
+        // Track 5: Live Recording 1
         this.voices.live = new LiveVoice();
         createTrackChain(this.voices.live, 'live');
 
-        // Track 6: Piano Loop (Internal Recording)
+        // Track 6: Live Recording 2
+        this.voices.live2 = new LiveVoice();
+        createTrackChain(this.voices.live2, 'live2');
+
+        // Track 7: Piano Loop 1
         this.voices.pianoloop = new LiveVoice();
         createTrackChain(this.voices.pianoloop, 'pianoloop');
+
+        // Track 8: Piano Loop 2
+        this.voices.pianoloop2 = new LiveVoice();
+        createTrackChain(this.voices.pianoloop2, 'pianoloop2');
     }
 
     trigger(trackName, time, velocity = 1) {
@@ -393,6 +438,15 @@ export class AudioEngine {
     }
 
     triggerPianoAttack(note, velocity = 1) {
+        // ARM → RECORDING auto-start on first note logic
+        // Check ALL loop tracks
+        ['pianoloop', 'pianoloop2'].forEach(track => {
+            if (this.pianoRecordStates[track] === 'ARMED') {
+                this.startPianoRecording(track);
+                console.log(`🚀 Auto-Start: Recording started for ${track} on note trigger!`);
+            }
+        });
+
         // Safety Check
         if (!this.pianoReady && !this.pianoSampler) return;
 
@@ -556,29 +610,67 @@ export class AudioEngine {
         }
     }
 
-    async startRecording() {
-        if (this.recorder && this.recorder.state === 'started') {
-            return this.stopRecording();
+    async startRecording(track = 'live') {
+        // We'll use the main recorder for 'live', maybe need 'recorder2' for 'live2' if simultaneous?
+        // For now, let's create a second recorder for 'live2' on demand or just use one?
+        // Simplest: Create recorder2 in startRecording if needed?
+        // Or in constructor? Let's just create it on initRecording?
+
+        let targetRecorder;
+        if (track === 'live2') {
+            if (!this.recorder2) {
+                this.mic2 = new Tone.UserMedia();
+                this.recorder2 = new Tone.Recorder();
+                this.mic2.connect(this.recorder2); // Connect new mic instance? Or same?
+                // Tone.UserMedia is a global input wrapper. new Tone.UserMedia() creates a new connection to the input.
+                // Should be fine.
+                try {
+                    await this.mic2.open();
+                } catch (e) { console.error(e); }
+            }
+            targetRecorder = this.recorder2;
+        } else {
+            targetRecorder = this.recorder;
         }
 
-        if (!this.recorder) {
-            await this.initRecording();
+        if (targetRecorder && targetRecorder.state === 'started') {
+            return this.stopRecording(track);
         }
 
-        if (this.recorder && this.recorder.state !== 'started') {
-            // Delay for 500ms to avoid mouse click
-            console.log("Preparing to record...");
+        if (!targetRecorder) {
+            await this.initRecording(); // inits main recorder
+            if (track !== 'live2') targetRecorder = this.recorder;
+            else {
+                // if initRecording didn't init recorder2 (it doesn't), we rely on the block above?
+                // Actually let's just use the block above to init recorder 2.
+                // Re-running logic:
+                if (track === 'live2' && !this.recorder2) {
+                    // It should have been created above.
+                }
+            }
+        }
+
+        // Ensure we have a recorder
+        if (track === 'live2' && !this.recorder2) return; // failed
+        if (track !== 'live2' && !this.recorder) return; // failed
+
+        const rec = (track === 'live2') ? this.recorder2 : this.recorder;
+
+        if (rec && rec.state !== 'started') {
+            console.log(`Preparing to record ${track}...`);
             await new Promise(resolve => setTimeout(resolve, 500));
 
-            this.recorder.start();
-            console.log("Recording started...");
+            rec.start();
+            console.log(`Recording ${track} started...`);
 
             // Auto-stop after 10 seconds
-            this.recordingTimeout = setTimeout(() => {
-                if (this.recorder && this.recorder.state === 'started') {
+            // Store timeout on the instance to allow clearing specific one
+            const timeoutKey = `recordingTimeout_${track}`;
+            this[timeoutKey] = setTimeout(() => {
+                if (rec && rec.state === 'started') {
                     console.log("Max recording duration reached (10s). Stopping...");
-                    this.stopRecording();
-                    window.dispatchEvent(new Event('recordingStopped'));
+                    this.stopRecording(track);
+                    window.dispatchEvent(new CustomEvent('recordingStopped', { detail: { track: track } }));
                 }
             }, 10000);
 
@@ -586,19 +678,22 @@ export class AudioEngine {
         }
     }
 
-    async stopRecording() {
-        if (this.recordingTimeout) {
-            clearTimeout(this.recordingTimeout);
-            this.recordingTimeout = null;
+    async stopRecording(track = 'live') {
+        const timeoutKey = `recordingTimeout_${track}`;
+        if (this[timeoutKey]) {
+            clearTimeout(this[timeoutKey]);
+            this[timeoutKey] = null;
         }
 
-        if (this.recorder && this.recorder.state === 'started') {
-            const blob = await this.recorder.stop();
+        const rec = (track === 'live2') ? this.recorder2 : this.recorder;
+
+        if (rec && rec.state === 'started') {
+            const blob = await rec.stop();
             const url = URL.createObjectURL(blob);
             const buffer = await new Tone.Buffer().load(url);
 
-            // Simple Normalization (Peak)
-            const channel = buffer.toArray(0); // Get Float32Array of channel 0
+            // Normalize
+            const channel = buffer.toArray(0);
             let max = 0;
             for (let i = 0; i < channel.length; i++) {
                 if (Math.abs(channel[i]) > max) max = Math.abs(channel[i]);
@@ -606,16 +701,16 @@ export class AudioEngine {
             if (max > 0) {
                 const scale = 1 / max;
                 const scaled = channel.map(v => v * scale);
-                buffer.fromArray(scaled); // Re-populate
+                buffer.fromArray(scaled);
             }
 
-            if (this.voices.live) {
-                this.voices.live.setBuffer(buffer);
+            if (this.voices[track]) {
+                this.voices[track].setBuffer(buffer);
             }
-            console.log("Recording stopped. Buffer normalized and set to Live track.");
+            console.log(`Recording ${track} stopped. Buffer set.`);
 
-            // Reset Pitch just in case
-            this.setTrackPitch('live', 0);
+            // Reset Pitch
+            this.setTrackPitch(track, 0);
 
             return { state: 'stopped', url: url };
         }
@@ -655,5 +750,39 @@ export class AudioEngine {
             return true;
         }
         return false;
+    }
+
+    // --- Vault Logic ---
+
+    armVault() {
+        if (this.vaultState === 'IDLE') {
+            this.vaultState = 'ARMED';
+            console.log("Vault ARMED");
+            window.dispatchEvent(new CustomEvent('vaultStateChanged', { detail: { state: 'ARMED' } }));
+        }
+    }
+
+    async startVaultRecording() {
+        if (this.vaultRecorder.state !== 'started') {
+            this.vaultRecorder.start();
+            this.vaultState = 'RECORDING';
+            console.log("Vault Recording STARTED");
+            window.dispatchEvent(new CustomEvent('vaultStateChanged', { detail: { state: 'RECORDING' } }));
+        }
+    }
+
+    async stopVaultRecording() {
+        if (this.vaultRecorder.state === 'started') {
+            const blob = await this.vaultRecorder.stop();
+            this.vaultState = 'IDLE';
+            console.log("Vault Recording STOPPED");
+
+            window.dispatchEvent(new CustomEvent('vaultStateChanged', { detail: { state: 'IDLE' } }));
+
+            // Dispatch event with blob
+            window.dispatchEvent(new CustomEvent('vaultRecordingFinished', { detail: { blob: blob } }));
+
+            return blob;
+        }
     }
 }

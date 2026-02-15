@@ -2,6 +2,7 @@ import { SequencerGrid } from './SequencerGrid';
 import { Mixer } from './Mixer';
 import { RemixControl } from './RemixControl';
 import { PianoRoll } from './PianoRoll';
+import { VaultManager } from './VaultManager';
 
 export class UIManager {
     constructor(audioEngine, sequencer) {
@@ -12,6 +13,7 @@ export class UIManager {
         this.piano = new PianoRoll(audioEngine);
         this.mixer = new Mixer(audioEngine);
         this.remix = new RemixControl(sequencer);
+        this.vault = new VaultManager(audioEngine);
 
 
         this.initTabs();
@@ -44,6 +46,14 @@ export class UIManager {
         seqContainer.style.borderBottom = '1px solid #444';
         main.appendChild(seqContainer);
 
+        // Vault (Fixed Height)
+        const vaultContainer = document.createElement('div');
+        vaultContainer.id = 'vault-container';
+        vaultContainer.style.background = '#1a1a1a';
+        vaultContainer.style.flex = '0 0 auto';
+        // VaultManager sets its own height/style, but we wrap it safely
+        main.appendChild(vaultContainer);
+
         // Middle: Piano (Fixed Height)
         const pianoContainer = document.createElement('div');
         pianoContainer.id = 'piano-container';
@@ -57,8 +67,9 @@ export class UIManager {
         // Bottom: Mixer (Flex 1)
         const mixerContainer = document.createElement('div');
         mixerContainer.id = 'mixer-container';
+        mixerContainer.className = 'mixer-container';
         mixerContainer.style.flex = '1';
-        mixerContainer.style.overflowY = 'auto';
+        mixerContainer.style.overflow = 'auto';
         main.appendChild(mixerContainer);
 
         // Render Components into their containers
@@ -81,6 +92,8 @@ export class UIManager {
 
         this.mixer.container = mixerContainer;
         this.mixer.render();
+
+        this.vault.render(vaultContainer);
     }
 
     renderPianoControls(container) {

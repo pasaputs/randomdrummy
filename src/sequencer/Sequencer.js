@@ -4,7 +4,7 @@ export class Sequencer {
     constructor(audioEngine) {
         this.audioEngine = audioEngine;
         this.steps = 32;
-        this.tracks = ['kick', 'snare', 'hihat', 'resonator', 'live', 'pianoloop'];
+        this.tracks = ['kick', 'snare', 'hihat', 'resonator', 'live', 'live2', 'pianoloop', 'pianoloop2'];
 
         // logic: pattern[trackIndex][stepIndex] = true/false (or velocity)
         this.pattern = {
@@ -13,14 +13,16 @@ export class Sequencer {
             hihat: new Array(32).fill(false),
             resonator: new Array(32).fill(false),
             live: new Array(32).fill(false),
-            pianoloop: new Array(32).fill(false)
+            live2: new Array(32).fill(false),
+            pianoloop: new Array(32).fill(false),
+            pianoloop2: new Array(32).fill(false)
         };
 
         this.isPlaying = false;
         this.currentStep = 0;
 
-        this.muteStates = { kick: false, snare: false, hihat: false, resonator: false, live: false, pianoloop: false };
-        this.soloStates = { kick: false, snare: false, hihat: false, resonator: false, live: false, pianoloop: false };
+        this.muteStates = { kick: false, snare: false, hihat: false, resonator: false, live: false, live2: false, pianoloop: false, pianoloop2: false };
+        this.soloStates = { kick: false, snare: false, hihat: false, resonator: false, live: false, live2: false, pianoloop: false, pianoloop2: false };
 
         // Schedule the loop
         this.loopId = null;
@@ -49,6 +51,19 @@ export class Sequencer {
     tick(time) {
         // Current 16th note step
         const step = this.currentStep % this.steps;
+
+        // --- Vault Logic ---
+        if (step === 0 && this.audioEngine.vaultState === 'ARMED') {
+            this.audioEngine.startVaultRecording();
+        }
+
+        if (step === 31 && this.audioEngine.vaultState === 'RECORDING') {
+            const stepDuration = Tone.Time("16n").toSeconds();
+            setTimeout(() => {
+                this.audioEngine.stopVaultRecording();
+            }, stepDuration * 1000);
+        }
+
         this.remixAmount = this.remixAmount || 0;
 
         // Check Logic: Is any track soloed?

@@ -16,10 +16,11 @@ const FOLDER_MAP = {
     'hi hats': 'hihat',
     'snare': 'snare',
     'percs': 'percs',
-    '808': 'resonator'
+    '808': 'resonator',
+    'piano': 'piano'  // ✅ LISATUD: Nüüd tunneb ka klaveri ära
 };
 
-console.log("🚀 Skript käivitus (Normalized Mapping)...");
+console.log("🚀 Skript käivitus (Piano Presets Support)...");
 
 if (!fs.existsSync(SAMPLES_DIR)) {
     console.error("❌ VIGA: Ei leia kausta 'public/samples'!");
@@ -35,52 +36,52 @@ try {
     folders.forEach(folder => {
         const folderPath = path.join(SAMPLES_DIR, folder);
 
-        // Calculate mapped key (default to folder name if not found, but logged)
+        // Leiame vastava võtme (kick, snare, piano...)
         const mappedKey = FOLDER_MAP[folder.toLowerCase()];
 
+        // Kontrollime, kas on kaust ja kas meil on selle jaoks vaste olemas
         if (fs.statSync(folderPath).isDirectory() && mappedKey) {
 
-            const files = fs.readdirSync(folderPath).filter(file => {
+            // --- 🎹 ERILOOGIKA KLA VERILE ---
+            let searchPath = folderPath;      // Kust me faile otsime?
+            let urlSubPath = folder;          // Mis läheb veebiaadressi?
+
+            // Kui kaust on 'piano', vaatame sügavamale 'presets' kausta
+            if (folder.toLowerCase() === 'piano') {
+                const presetsPath = path.join(folderPath, 'presets');
+                if (fs.existsSync(presetsPath)) {
+                    searchPath = presetsPath;           // Muudame otsingukoha
+                    urlSubPath = `${folder}/presets`;   // Muudame URLi (piano/presets)
+                    console.log("   🎹 Leidsin Piano kausta, skaneerin 'presets' alamkausta...");
+                }
+            }
+            // --------------------------------
+
+            // Nüüd loeme faile õigest kohast (searchPath)
+            const files = fs.readdirSync(searchPath).filter(file => {
                 const lower = file.toLowerCase();
                 return lower.endsWith('.wav') || lower.endsWith('.mp3') || lower.endsWith('.ogg');
             });
 
             if (files.length > 0) {
                 manifest[mappedKey] = files.map(f => {
-                    // Path normalization:
-                    // 1. Force forward slashes
-                    // 2. Start with /
-                    // 3. Encoded URI components
+                    // Ehitame veebiaadressi käsitsi, et vältida Windowsi "\" märke
+                    // Kasutame urlSubPath muutujat (mis on kas "kick" või "piano/presets")
 
-                    // We construct the web-compatible path manually
-                    // e.g., /samples/hi%20hats/file.wav
-                    const safeFolder = encodeURIComponent(folder); // handles spaces in folder
-                    const safeFile = encodeURIComponent(f);       // handles spaces in file
-
-                    // Note: encodeURIComponent encodes spaces as %20, which is what we want for URLs.
-                    // However, we must Ensure we don't double slash or miss slash.
-
-                    // But wait, the previous script used encodeURI on the whole string, which is risky for parts.
-                    // Let's stick to a robust simple construction.
-                    // Actually, for web server 'public' root:
-                    // File on disk: public/samples/hi hats/foo.wav
-                    // URL: /samples/hi%20hats/foo.wav
-
-                    return `/samples/${folder}/${f}`; // We will encode this later or let the browser handle standard path? 
-                    // The user prompt specifically asked for encodeURI.
-                    // "Uses encodeURI to handle spaces in filenames."
-
-                }).map(p => encodeURI(p)); // Encode the whole path to be safe
+                    // encodeURI tagab, et tühikud ja erimärgid töötaksid
+                    return encodeURI(`/samples/${urlSubPath}/${f}`);
+                });
 
                 totalFiles += files.length;
                 console.log(`   ✅ ${folder} -> '${mappedKey}': ${files.length} faili.`);
             }
         } else if (fs.statSync(folderPath).isDirectory()) {
-            console.warn(`   ⚠️  Hoiatus: Kaustale '${folder}' puudub vaste (FOLDER_MAP). Jätan vahele.`);
+            // Jätame vahele kaustad, mida pole nimekirjas (nt .git, temp jne)
+            // console.warn(`   ⚠️  Jätan vahele tundmatu kausta: '${folder}'`);
         }
     });
 
-    // Ensure output directory exists
+    // Loome vajadusel kausta ja salvestame faili
     const outputDir = path.dirname(OUTPUT_FILE);
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 

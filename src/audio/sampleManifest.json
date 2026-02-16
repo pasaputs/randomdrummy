@@ -75,6 +75,28 @@
     "/samples/percs/Zay%20Crash.wav",
     "/samples/percs/Zay%20Signature%20Crash.wav"
   ],
+  "piano": [
+    "/samples/piano/presets/75_Cm_PianoLofi_02_TL.wav",
+    "/samples/piano/presets/80_Cm_Rhodes_05_TL.wav",
+    "/samples/piano/presets/85_A_Rhodes_14_TL.wav",
+    "/samples/piano/presets/85_G_Rhodes_11_TL.wav",
+    "/samples/piano/presets/Buzzfeed.wav",
+    "/samples/piano/presets/Chinese.wav",
+    "/samples/piano/presets/D#_PianoVoxChord.wav",
+    "/samples/piano/presets/Kruger.wav",
+    "/samples/piano/presets/Low.wav",
+    "/samples/piano/presets/Major%20Piano%20Chord%20Stab.wav",
+    "/samples/piano/presets/Memphis%20Piano%20Loop.wav",
+    "/samples/piano/presets/OmgRonny.wav",
+    "/samples/piano/presets/Phonky.wav",
+    "/samples/piano/presets/Repeater.wav",
+    "/samples/piano/presets/Sauce.wav",
+    "/samples/piano/presets/School.wav",
+    "/samples/piano/presets/Travis.wav",
+    "/samples/piano/presets/%5BJUNTMANE%20ACAPELLA%5D%20(6).wav",
+    "/samples/piano/presets/%5BJUNTMANE%20ACAPELLA%5D%20(7).wav",
+    "/samples/piano/presets/%5BJUNTMANE%20ACAPELLA%5D%20(9).wav"
+  ],
   "snare": [
     "/samples/snare/SNARE%20(1).wav",
     "/samples/snare/SNARE%20(16).wav",

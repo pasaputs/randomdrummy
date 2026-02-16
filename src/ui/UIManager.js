@@ -1,9 +1,11 @@
 import { SequencerGrid } from './SequencerGrid';
 import { Mixer } from './Mixer';
+import * as Tone from 'tone';
 import { RemixControl } from './RemixControl';
 import { PianoRoll } from './PianoRoll';
 import { VaultManager } from './VaultManager';
 import { ArrangerView } from './ArrangerView';
+import { saveState } from '../utils/StateManager.js';
 
 export class UIManager {
     constructor(audioEngine, sequencer) {
@@ -326,13 +328,26 @@ export class UIManager {
         const bpmInput = document.getElementById('bpm');
 
         playBtn.addEventListener('click', async () => {
+            // 1. WAKE UP AUDIO ENGINE (Crucial Step)
+            await Tone.start();
+            console.log("🔊 Audio Context Resumed");
+
+            // Ensure Audio Engine is valid (load saved state etc)
             await this.audioEngine.init();
+
             if (this.sequencer.isPlaying) {
                 this.sequencer.stop(); // Use new method
                 playBtn.textContent = 'PLAY';
+                playBtn.classList.remove('active');
             } else {
+                // 2. Start Transport if needed
+                if (Tone.Transport.state !== 'started') {
+                    Tone.Transport.start();
+                }
+
                 this.sequencer.start(); // Use new method
-                playBtn.textContent = 'PAUSE';
+                playBtn.textContent = 'STOP';
+                playBtn.classList.add('active');
             }
         });
 
@@ -343,8 +358,35 @@ export class UIManager {
             document.querySelectorAll('.step-btn.playing').forEach(el => el.classList.remove('playing'));
         });
 
+        // Clear Pattern Button
+        const clearBtn = document.createElement('button');
+        clearBtn.id = 'clear-pattern-btn';
+        clearBtn.textContent = '🗑️ CLEAR';
+        clearBtn.style.background = '#333';
+        clearBtn.style.color = '#ccc';
+        clearBtn.style.border = '1px solid #555';
+        clearBtn.style.padding = '5px 10px';
+        clearBtn.style.borderRadius = '4px';
+        clearBtn.style.cursor = 'pointer';
+        clearBtn.style.marginLeft = '10px';
+        clearBtn.style.fontWeight = 'bold';
+        clearBtn.style.fontSize = '0.8rem';
+
+        clearBtn.onclick = () => {
+            // Call the nuclear option (handles its own confirm and DOM clearing)
+            this.sequencer.clearPattern();
+
+            // Optional: Re-render grid to be 100% sure UI matches state
+            if (this.grid) this.grid.render();
+        };
+
+        // Insert after Stop button (assuming parent is .transport-controls or similar)
+        stopBtn.parentNode.insertBefore(clearBtn, stopBtn.nextSibling);
+
         bpmInput.addEventListener('input', (e) => {
-            this.audioEngine.transport.bpm.value = parseInt(e.target.value);
+            const bpm = parseInt(e.target.value);
+            this.audioEngine.transport.bpm.value = bpm;
+            saveState('sequencerBpm', bpm);
         });
 
         // Session Recording Logic

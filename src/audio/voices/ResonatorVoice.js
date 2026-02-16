@@ -2,7 +2,7 @@ import * as Tone from 'tone';
 
 export class ResonatorVoice {
     constructor() {
-        this.output = new Tone.Volume(0);
+        this.output = new Tone.PanVol(0, -10);
 
         // Synth Path (Sampler-like or Synth?)
         // Originally likely an 808 synth or sample player

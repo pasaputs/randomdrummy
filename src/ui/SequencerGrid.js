@@ -24,6 +24,52 @@ export class SequencerGrid {
         wrapper.style.padding = '10px';
         wrapper.style.minWidth = 'fit-content';
 
+        // --- 0. Header Row ---
+        const headerLabel = document.createElement('div');
+        headerLabel.innerHTML = '<span>TRACKS</span><br><span style="font-size:0.6rem; color:#666">GLOBAL</span>';
+        headerLabel.style.gridColumn = '1';
+        headerLabel.style.color = '#888';
+        headerLabel.style.fontSize = '0.7rem';
+        headerLabel.style.textAlign = 'right';
+        headerLabel.style.paddingRight = '10px';
+        headerLabel.style.alignSelf = 'center';
+        wrapper.appendChild(headerLabel);
+
+        // Header Steps (Spacer)
+        const headerSteps = document.createElement('div');
+        wrapper.appendChild(headerSteps);
+
+        // Global Dice
+        const globalDice = document.createElement('button');
+        globalDice.textContent = '🎲';
+        globalDice.title = 'Randomize ALL';
+        globalDice.className = 'dice-btn';
+        globalDice.style.opacity = '1';
+        globalDice.style.color = '#fff';
+        globalDice.onclick = () => {
+            if (confirm("Randomize ALL tracks?")) {
+                this.sequencer.randomizeAllTracks(); // Need to implement or use existing
+                this.render();
+            }
+        };
+        wrapper.appendChild(globalDice);
+
+        // Global Clear (The requested button!)
+        const clearBtn = document.createElement('button');
+        clearBtn.textContent = '🗑️'; // or "CLR"
+        clearBtn.className = 'mute-btn'; // reuse style
+        clearBtn.style.background = '#d32f2f';
+        clearBtn.title = 'Clear Pattern';
+        clearBtn.onclick = () => {
+            if (confirm("Clear ONE pattern?")) {
+                this.sequencer.clearPattern();
+                this.render();
+            }
+        };
+        // Span 2 columns (Mute+Solo space)
+        clearBtn.style.gridColumn = 'span 2';
+        wrapper.appendChild(clearBtn);
+
         this.sequencer.tracks.forEach((track, trackIndex) => {
             // 1. Label
             const label = document.createElement('div');

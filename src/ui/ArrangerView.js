@@ -196,8 +196,21 @@ export class ArrangerView {
                 if (clipData.url) {
                     const tempAudio = new Audio(clipData.url);
                     tempAudio.onloadedmetadata = () => {
-                        const duration = tempAudio.duration; // Seconds
+                        let duration = tempAudio.duration; // Seconds
+
+                        // --- AUTO-TRIM LOGIC ---
+                        // 32 Steps = 2 Bars = 8 Beats
+                        // Duration = (60 / BPM) * 8
+                        const bpm = Tone.Transport.bpm.value;
+                        const exact32StepsDuration = (60 / bpm) * 8; // e.g. 4.0s at 120BPM
+
+                        // Rounding tolerance? Let's strictly cap if > limit by a tiny margin
                         if (isFinite(duration)) {
+                            if (duration > exact32StepsDuration) {
+                                console.log(`✂️ Auto-Trimming clip from ${duration.toFixed(3)}s to ${exact32StepsDuration.toFixed(3)}s (32 steps)`);
+                                duration = exact32StepsDuration;
+                            }
+
                             const calculatedWidth = duration * this.pixelsPerSecond;
                             console.log(`Clip Duration: ${duration}s, Width: ${calculatedWidth}px`);
 

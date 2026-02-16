@@ -1,4 +1,5 @@
 import * as Tone from 'tone';
+import { saveState, loadState } from '../utils/StateManager.js';
 
 export class Sequencer {
     constructor(audioEngine) {
@@ -7,7 +8,7 @@ export class Sequencer {
         this.tracks = ['kick', 'snare', 'hihat', 'percs', 'resonator', 'live', 'live2', 'pianoloop', 'pianoloop2'];
 
         // logic: pattern[trackIndex][stepIndex] = true/false (or velocity)
-        this.pattern = {
+        const defaultPattern = {
             kick: new Array(32).fill(false),
             snare: new Array(32).fill(false),
             hihat: new Array(32).fill(false),
@@ -18,6 +19,13 @@ export class Sequencer {
             pianoloop: new Array(32).fill(false),
             pianoloop2: new Array(32).fill(false)
         };
+
+        this.pattern = loadState('sequencerPattern', defaultPattern);
+
+        // Restore BPM
+        const savedBpm = loadState('sequencerBpm', 120);
+        Tone.Transport.bpm.value = savedBpm;
+        console.log(`Loaded BPM: ${savedBpm}`);
 
         this.isPlaying = false;
         this.currentStep = 0;
@@ -135,6 +143,7 @@ export class Sequencer {
 
     toggleStep(track, step) {
         this.pattern[track][step] = !this.pattern[track][step];
+        saveState('sequencerPattern', this.pattern);
         return this.pattern[track][step];
     }
 
@@ -144,6 +153,7 @@ export class Sequencer {
             // 30% chance of a note
             this.pattern[track][i] = Math.random() < 0.3;
         }
+        saveState('sequencerPattern', this.pattern);
         if (this.onPatternChange) this.onPatternChange(track);
     }
 
@@ -151,8 +161,46 @@ export class Sequencer {
         this.tracks.forEach(t => this.randomizeTrack(t));
     }
 
+    clearPattern() {
+        if (!confirm("⚠️ KUSTUTA KÕIK? See teeb platsi täiesti puhtaks.")) return;
+
+        console.log("🔥 NUKING GRID: Clearing all steps...");
+
+        // 1. CLEAR INTERNAL STATE (The Data)
+        // Adapted to handle this.pattern object structure
+        if (this.pattern) {
+            Object.keys(this.pattern).forEach(track => {
+                const steps = this.pattern[track];
+                // Loop through every step (columns)
+                if (Array.isArray(steps)) {
+                    for (let i = 0; i < steps.length; i++) {
+                        if (typeof steps[i] === 'object' && steps[i] !== null) {
+                            steps[i].active = false; // Turn off object-based steps
+                        } else {
+                            steps[i] = false; // Turn off simple number-based steps (using false to match existing type)
+                        }
+                    }
+                }
+            });
+        }
+
+        // 2. CLEAR VISUAL DOM (The Screen)
+        // Find all active buttons and force-remove the class immediately
+        const activeButtons = document.querySelectorAll('.step-btn.active');
+        activeButtons.forEach(btn => {
+            btn.classList.remove('active');
+            btn.style.backgroundColor = ''; // Remove any inline styles if present
+        });
+
+        // 3. SAVE & SYNC
+        saveState('sequencerPattern', this.pattern);
+        console.log("✅ Grid Cleared: State updated and visual classes removed.");
+    }
+
+
     clearTrack(track) {
         this.pattern[track].fill(false);
+        saveState('sequencerPattern', this.pattern);
         if (this.onPatternChange) this.onPatternChange(track);
     }
 

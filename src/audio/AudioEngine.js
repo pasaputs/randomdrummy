@@ -6,6 +6,7 @@ import { ResonatorVoice } from './voices/ResonatorVoice';
 import { LiveVoice } from './voices/LiveVoice';
 import { PercsVoice } from './voices/PercsVoice.js';
 import sampleManifest from './sampleManifest.json';
+import { saveState, loadState } from '../utils/StateManager.js';
 
 export class AudioEngine {
     // Properties initialized in constructor
@@ -103,7 +104,9 @@ export class AudioEngine {
         this.sampleManifest = sampleManifest;
         // Ensure percs exists
         if (!this.sampleManifest.percs) this.sampleManifest.percs = [];
-        // this.loadManifest(); // Removed: Imported directly
+
+        // Persist Selected Samples
+        this.currentSamples = loadState('selectedSamples', {});
     }
 
     // Internal helper: actually starts the MediaRecorder
@@ -196,6 +199,15 @@ export class AudioEngine {
                 db = Tone.gainToDb(value / 100);
             }
             this.voices[track].output.volume.rampTo(db, 0.1);
+
+            // Save State Debounced? 
+            // Or just save. LocalStorage is sync but fast enough for infrequent updates.
+            // But dragging a slider triggers this a lot.
+            // Ideally we should debounce. 
+            // For now, let's NOT save here on every drag, but maybe rely on user action or periodic save?
+            // OR: Implement a simple debounce.
+            if (this.saveTimeout) clearTimeout(this.saveTimeout);
+            this.saveTimeout = setTimeout(() => this.saveAudioState(), 1000);
         }
     }
 
@@ -330,12 +342,28 @@ export class AudioEngine {
         // this.setupMIDI(); // Moved to MIDIController
         this.loadOffsets();
 
-        // Load Default Percs
-        const percs = this.sampleManifest.percs;
-        if (percs && percs.length > 0) {
-            this.loadSample('percs', percs[0]);
-            console.log("Default Percs Loaded:", percs[0]);
-        }
+        this.loadOffsets();
+
+        // Load Saved Samples or Defaults
+        // Kick, Snare, HiHat, Resonator, Percs
+        const tracks = ['kick', 'snare', 'hihat', 'resonator', 'percs'];
+
+        tracks.forEach(track => {
+            if (this.currentSamples[track]) {
+                const filename = this.currentSamples[track];
+                console.log(`Loading saved sample for ${track}: ${filename}`);
+                this.loadSample(track, filename);
+            } else if (track === 'percs') {
+                // Default Percs if not saved
+                const percs = this.sampleManifest.percs;
+                if (percs && percs.length > 0) {
+                    this.loadSample('percs', percs[0]);
+                }
+            }
+        });
+
+        // Apply Mixer/Audio Settings (Volume, etc)
+        this.applySavedSettings();
     }
 
     loadSample(track, filename) {
@@ -350,6 +378,10 @@ export class AudioEngine {
                 // Construct URL - assuming flat structure in public/samples based on manifest
                 const url = `/${filename}`;
                 this.voices[track].loadSample(url);
+
+                // Save State (only for file paths, not blobs)
+                this.currentSamples[track] = filename;
+                saveState('selectedSamples', this.currentSamples);
             }
             // Reset Pitch on Load
             this.setTrackPitch(track, 0);
@@ -461,7 +493,23 @@ export class AudioEngine {
 
     trigger(trackName, time, velocity = 1) {
         if (this.voices[trackName]) {
-            this.voices[trackName].trigger(time, velocity);
+            const voice = this.voices[trackName];
+
+            // SAFETY FIX: If time is in the past, snap to "now"
+            // Tone.js throws error if time < context.currentTime
+            if (time && time < this.ctx.currentTime) {
+                time = this.ctx.currentTime;
+            }
+
+            // Trigger the voice (handle both synth and sampler types)
+            if (typeof voice.trigger === 'function') {
+                // If it's a custom Voice class (KickVoice etc)
+                voice.trigger(time, velocity);
+            } else if (typeof voice.triggerAttackRelease === 'function') {
+                voice.triggerAttackRelease("C4", "8n", time, velocity);
+            } else if (typeof voice.start === 'function') {
+                voice.start(time);
+            }
         }
     }
 
@@ -754,39 +802,29 @@ export class AudioEngine {
         return { state: 'idle' };
     }
 
-    async startMasterRecording() {
-        if (this.masterRecorder.state !== 'started') {
-            // Delay for 500ms
-            console.log("Preparing Master Recording...");
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            this.masterRecorder.start();
-            console.log("Master Recording Started");
-            return true;
-        }
-        return false;
-    }
-
     async stopMasterRecording() {
         if (this.masterRecorder.state === 'started') {
             const blob = await this.masterRecorder.stop();
             const url = URL.createObjectURL(blob);
 
-            // Trigger Download
+            // Create Download Link
             const a = document.createElement('a');
             a.style.display = 'none';
             a.href = url;
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            a.download = `session_jam_${timestamp}.wav`;
+            a.download = `drummimasin-session-${Date.now()}.webm`;
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
 
-            console.log("Master Recording Stopped and Downloaded");
-            return true;
+            // Cleanup
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+
+            console.log("Master Recording Saved");
+            return url;
         }
-        return false;
+        return null;
     }
 
     // --- Vault Logic ---
@@ -847,14 +885,38 @@ export class AudioEngine {
             };
 
             // 5. SAVE ON STOP
-            this.vaultRecorder.onstop = () => {
+            this.vaultRecorder.onstop = async () => {
                 console.log("📼 STOP EVENT FIRED. Processing blob...");
-                const blob = new Blob(this.vaultChunks, { type: mimeType || 'audio/webm' });
+
+                // 1. Convert MediaRecorder Blob (WebM/Ogg) to ArrayBuffer
+                const webmBlob = new Blob(this.vaultChunks, { type: mimeType || 'audio/webm' });
+                const arrayBuffer = await webmBlob.arrayBuffer();
+
+                // 2. Decode to AudioBuffer
+                let audioBuffer;
+                try {
+                    audioBuffer = await Tone.context.decodeAudioData(arrayBuffer);
+                } catch (e) {
+                    console.error("Audio Decoding Failed:", e);
+                    return;
+                }
+
+                // 3. Trim Latency (Silence Start)
+                const trimmedBuffer = this.trimSilentStart(audioBuffer);
+
+                // 4. Crop to Exact Grid (2 Bars)
+                const bpm = Tone.Transport.bpm.value;
+                const bars = 2; // Default to 2 bars for Vault loops
+                const croppedBuffer = this.cropToGrid(trimmedBuffer, bars, bpm);
+
+                // 5. Encode back to WAV Blob
+                const wavBlob = this.bufferToWav(croppedBuffer);
+                console.log(`✅ Smart Trim Complete. Final Size: ${wavBlob.size} bytes`);
 
                 // --- Dispatch Event (UI handles download/list) ---
                 this.vaultState = 'IDLE';
                 window.dispatchEvent(new CustomEvent('vaultStateChanged', { detail: { state: 'IDLE' } }));
-                window.dispatchEvent(new CustomEvent('vaultRecordingFinished', { detail: { blob: blob } }));
+                window.dispatchEvent(new CustomEvent('vaultRecordingFinished', { detail: { blob: wavBlob } }));
             };
 
             // 6. START
@@ -866,6 +928,139 @@ export class AudioEngine {
         } catch (err) {
             console.error("❌ MediaRecorder Error:", err);
             this.vaultState = 'IDLE';
+        }
+    }
+
+    // --- SMART LOOP HELPERS ---
+
+    trimSilentStart(audioBuffer) {
+        const channelData = audioBuffer.getChannelData(0); // Left channel
+        const threshold = 0.01; // -40dB approx
+        let startSample = 0;
+
+        // Find start
+        for (let i = 0; i < channelData.length; i++) {
+            if (Math.abs(channelData[i]) > threshold) {
+                startSample = i;
+                break;
+            }
+        }
+
+        if (startSample > 0) {
+            console.log(`✂️ Removing ${startSample} samples of latency silence.`);
+            const newLength = audioBuffer.length - startSample;
+            const newBuffer = Tone.context.createBuffer(
+                audioBuffer.numberOfChannels,
+                newLength,
+                audioBuffer.sampleRate
+            );
+
+            for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+                const oldData = audioBuffer.getChannelData(ch);
+                const newData = newBuffer.getChannelData(ch);
+                // Copy shifted
+                for (let i = 0; i < newLength; i++) {
+                    newData[i] = oldData[i + startSample];
+                }
+            }
+            return newBuffer;
+        }
+        return audioBuffer;
+    }
+
+    cropToGrid(audioBuffer, bars = 2, bpm = 120) {
+        const secondsPerBar = (60 / bpm) * 4;
+        const targetDuration = secondsPerBar * bars;
+        const targetSamples = Math.floor(targetDuration * audioBuffer.sampleRate);
+
+        console.log(`📏 Cropping to ${bars} bars @ ${bpm} BPM = ${targetDuration.toFixed(3)}s (${targetSamples} samples). Current: ${audioBuffer.duration.toFixed(3)}s`);
+
+        if (Math.abs(audioBuffer.length - targetSamples) < 100) return audioBuffer; // Close enough
+
+        // Create exact buffer
+        const newBuffer = Tone.context.createBuffer(
+            audioBuffer.numberOfChannels,
+            targetSamples,
+            audioBuffer.sampleRate
+        );
+
+        const fadeOutSamples = Math.floor(0.010 * audioBuffer.sampleRate); // 10ms fade
+
+        for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+            const oldData = audioBuffer.getChannelData(ch);
+            const newData = newBuffer.getChannelData(ch);
+
+            // Copy (Fill silence if too short, trim if too long)
+            const copymode = Math.min(targetSamples, audioBuffer.length);
+            for (let i = 0; i < copymode; i++) {
+                newData[i] = oldData[i];
+            }
+
+            // Apply Fade Out at very end of TARGET (prevents click if cut mid-wave)
+            if (targetSamples <= audioBuffer.length) {
+                for (let i = 0; i < fadeOutSamples; i++) {
+                    const idx = targetSamples - 1 - i;
+                    if (idx >= 0) {
+                        newData[idx] *= (i / fadeOutSamples);
+                    }
+                }
+            }
+        }
+        return newBuffer;
+    }
+
+    bufferToWav(buffer) {
+        const numOfChan = buffer.numberOfChannels;
+        const length = buffer.length * numOfChan * 2 + 44;
+        const bufferArr = new ArrayBuffer(length);
+        const view = new DataView(bufferArr);
+        const channels = [];
+        let i;
+        let sample;
+        let offset = 0;
+        let pos = 0;
+
+        // write WAVE header
+        setUint32(0x46464952); // "RIFF"
+        setUint32(length - 8); // file length - 8
+        setUint32(0x45564157); // "WAVE"
+
+        setUint32(0x20746d66); // "fmt " chunk
+        setUint32(16); // length = 16
+        setUint16(1); // PCM (uncompressed)
+        setUint16(numOfChan);
+        setUint32(buffer.sampleRate);
+        setUint32(buffer.sampleRate * 2 * numOfChan); // avg. bytes/sec
+        setUint16(numOfChan * 2); // block-align
+        setUint16(16); // 16-bit (hardcoded in this encoder)
+
+        setUint32(0x61746164); // "data" - chunk
+        setUint32(length - pos - 4); // chunk length
+
+        // write interleaved data
+        for (i = 0; i < buffer.numberOfChannels; i++)
+            channels.push(buffer.getChannelData(i));
+
+        while (pos < buffer.length) {
+            for (i = 0; i < numOfChan; i++) {
+                sample = Math.max(-1, Math.min(1, channels[i][pos])); // clamp
+                sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0; // convert to 16-bit PCM
+                view.setInt16(44 + offset, sample, true);
+                offset += 2;
+            }
+            pos++;
+        }
+
+        return new Blob([bufferArr], { type: "audio/wav" });
+
+        function setUint16(data) {
+            view.setUint16(pos, data, true);
+            pos += 2;
+        }
+
+        function setUint32(data) {
+            view.setUint32(pos, data, true);
+            pos += 4;
         }
     }
 
@@ -955,6 +1150,111 @@ export class AudioEngine {
         if (this.onArrangementStop) {
             this.onArrangementStop();
             this.onArrangementStop = null;
+        }
+    }
+
+    // --- PERSISTENCE METHODS ---
+
+    setTrackPan(track, value) {
+        if (this.voices[track] && this.voices[track].output && this.voices[track].output.pan) {
+            this.voices[track].output.pan.value = value;
+            // Debounced save? Or relying on UI to save?
+            // UIManager typically calls saveAudioState on end.
+        } else if (this.channels && this.channels[track] && this.channels[track].pan) {
+            // For legacy channel objects if any
+            this.channels[track].pan.value = value;
+        }
+    }
+
+    // --- PERSISTENCE METHODS ---
+
+    saveAudioState() {
+        // Guard clause to prevent crash if init isn't done
+        if (!this.voices || !this.currentSamples) return;
+
+        const state = {
+            mixer: {},
+            samples: this.currentSamples,
+            piano: {}
+        };
+
+        // Loop through tracks to save volume/pan/mute/fx
+        ['kick', 'snare', 'hihat', 'percs', 'resonator', 'live', 'live2', 'pianoloop', 'pianoloop2'].forEach(track => {
+            if (this.voices[track] && this.voices[track].output) {
+                state.mixer[track] = {
+                    vol: this.voices[track].output.volume.value,
+                    pan: (this.voices[track].output.pan) ? this.voices[track].output.pan.value : 0,
+                    // Pitch (custom prop on voice or player?)
+                    // Voices usually have player.playbackRate. derived from cents.
+                    // We need to store cents or rate.
+                    // setTrackPitch sets playbackRate. We should store rate or cents?
+                    // Let's store cents if possible, but reading it back is hard if we don't track it.
+                    // We can store playbackRate from player.
+                };
+
+                // Save FX specifically ?
+                // We have this.voices[track] which might have some state?
+                // Or this.trackDelays[track]
+                if (this.trackDelays && this.trackDelays[track]) {
+                    state.mixer[track].delayWet = this.trackDelays[track].wet.value;
+                    state.mixer[track].delayTime = this.trackDelays[track].delayTime.value;
+                }
+            }
+        });
+
+        // Save Piano
+        if (this.pianoVolume) {
+            state.piano.vol = this.pianoVolume.volume.value;
+        }
+
+        saveState('audioSettings', state);
+        console.log("💾 Audio State Saved");
+    }
+
+    applySavedSettings() {
+        const saved = loadState('audioSettings', null);
+        if (!saved) return;
+
+        console.log("📂 Applying saved audio settings...");
+
+        // 1. Restore Mixer
+        if (saved.mixer) {
+            Object.keys(saved.mixer).forEach(track => {
+                const settings = saved.mixer[track];
+                // Support both voices (actual) and channels (user prompt legacy) just in case
+                const voice = this.voices[track] || (this.channels && this.channels[track]);
+
+                if (voice && voice.output && settings) {
+                    if (settings.vol !== undefined) voice.output.volume.value = settings.vol;
+                    if (settings.pan !== undefined && voice.output.pan) voice.output.pan.value = settings.pan;
+
+                    // Restore Delay
+                    if (this.trackDelays && this.trackDelays[track]) {
+                        if (settings.delayWet !== undefined) this.trackDelays[track].wet.value = settings.delayWet;
+                        if (settings.delayTime !== undefined) this.trackDelays[track].delayTime.value = settings.delayTime;
+                    }
+                }
+            });
+        }
+
+        // 2. Restore Piano
+        if (saved.piano) {
+            if (this.pianoVolume && saved.piano.vol !== undefined) {
+                this.pianoVolume.volume.value = saved.piano.vol;
+            }
+        }
+
+        // 3. Restore Samples (Only if different)
+        if (saved.samples) {
+            Object.keys(saved.samples).forEach(track => {
+                const path = saved.samples[track];
+                if (path && this.currentSamples[track] !== path) {
+                    // Call the appropriate loader logic
+                    this.loadSample(track, path);
+                    // Update current tracking (loadSample does this too, but for safety)
+                    this.currentSamples[track] = path;
+                }
+            });
         }
     }
 }

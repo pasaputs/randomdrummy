@@ -2,7 +2,7 @@ import * as Tone from 'tone';
 
 export class LiveVoice {
     constructor() {
-        this.output = new Tone.Volume(0);
+        this.output = new Tone.PanVol(0, 0);
         this.player = new Tone.Player().connect(this.output);
         this.buffer = null;
     }

@@ -2,7 +2,7 @@ import * as Tone from 'tone';
 
 export class PercsVoice {
     constructor() {
-        this.output = new Tone.Volume(0);
+        this.output = new Tone.PanVol(0, -6);
 
         // Synth Path (Membrane for generic percussion)
         this.synth = new Tone.MembraneSynth({

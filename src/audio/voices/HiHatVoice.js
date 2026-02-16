@@ -2,7 +2,7 @@ import * as Tone from 'tone';
 
 export class HiHatVoice {
     constructor() {
-        this.output = new Tone.Volume(0);
+        this.output = new Tone.PanVol(0, -10);
 
         // Synth Path (Noise hihat)
         this.synth = new Tone.MetalSynth({

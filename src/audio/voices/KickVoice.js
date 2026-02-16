@@ -2,7 +2,7 @@ import * as Tone from 'tone';
 
 export class KickVoice {
     constructor() {
-        this.output = new Tone.Volume(0);
+        this.output = new Tone.PanVol(0, 0);
 
         // Synth Path
         this.synth = new Tone.MembraneSynth({

@@ -4,6 +4,8 @@ import { SnareVoice } from './voices/SnareVoice';
 import { HiHatVoice } from './voices/HiHatVoice';
 import { ResonatorVoice } from './voices/ResonatorVoice';
 import { LiveVoice } from './voices/LiveVoice';
+import { PercsVoice } from './voices/PercsVoice.js';
+import sampleManifest from './sampleManifest.json';
 
 export class AudioEngine {
     // Properties initialized in constructor
@@ -97,9 +99,11 @@ export class AudioEngine {
             pianoloop2: 'IDLE'
         };
 
-        // Load Manifest Immediately
-        this.sampleManifest = {};
-        this.loadManifest();
+        // Load Manifest Directly
+        this.sampleManifest = sampleManifest;
+        // Ensure percs exists
+        if (!this.sampleManifest.percs) this.sampleManifest.percs = [];
+        // this.loadManifest(); // Removed: Imported directly
     }
 
     // Internal helper: actually starts the MediaRecorder
@@ -325,6 +329,13 @@ export class AudioEngine {
         console.log('Audio Context Started');
         // this.setupMIDI(); // Moved to MIDIController
         this.loadOffsets();
+
+        // Load Default Percs
+        const percs = this.sampleManifest.percs;
+        if (percs && percs.length > 0) {
+            this.loadSample('percs', percs[0]);
+            console.log("Default Percs Loaded:", percs[0]);
+        }
     }
 
     loadSample(track, filename) {
@@ -369,14 +380,20 @@ export class AudioEngine {
             const randomFile = samples[Math.floor(Math.random() * samples.length)];
             console.log(`Randomizing ${track} to ${randomFile}`);
             this.loadSample(track, randomFile);
+
+            // Save path for UI/Presets if needed
+            // this.currentSamples[track] = randomFile;
+
             return randomFile; // Return for UI update
+        } else {
+            console.warn(`⚠️ No samples found for track: ${track}`);
         }
         return null;
     }
 
     randomizeAllSamples() {
-        // Kick, Snare, HiHat, Resonator
-        ['kick', 'snare', 'hihat', 'resonator'].forEach(track => this.randomizeSample(track));
+        // Kick, Snare, HiHat, Resonator, Percs
+        ['kick', 'snare', 'hihat', 'resonator', 'percs'].forEach(track => this.randomizeSample(track));
     }
 
     // --- MIDI Helper ---
@@ -421,7 +438,11 @@ export class AudioEngine {
         this.voices.resonator = new ResonatorVoice();
         createTrackChain(this.voices.resonator, 'resonator');
 
-        // Track 5: Live Recording 1
+        // Track 5: Percs
+        this.voices.percs = new PercsVoice();
+        createTrackChain(this.voices.percs, 'percs');
+
+        // Track 6: Live Recording 1
         this.voices.live = new LiveVoice();
         createTrackChain(this.voices.live, 'live');
 

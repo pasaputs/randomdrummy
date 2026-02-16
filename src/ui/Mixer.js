@@ -31,7 +31,7 @@ export class Mixer {
         wrapper.style.padding = '20px';
         wrapper.style.height = '100%';
 
-        const tracks = ['kick', 'snare', 'hihat', 'resonator', 'live', 'live2', 'pianoloop', 'pianoloop2'];
+        const tracks = ['kick', 'snare', 'hihat', 'percs', 'resonator', 'live', 'live2', 'pianoloop', 'pianoloop2'];
 
         tracks.forEach(track => {
             console.log("Rendering controls for:", track);

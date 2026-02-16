@@ -49,10 +49,20 @@ export class SnareVoice {
     }
 
     loadSample(url) {
-        this.player.load(url).then(() => {
-            this.useSample = true;
-            this.mode = 'sample';
-        });
+        if (!url) return;
+
+        // 🛡️ SANITIZE: Fix double slashes if they exist.
+        const cleanUrl = url.startsWith('//') ? url.replace('//', '/') : url;
+
+        console.log(`🎵 Loading sanitized path: ${cleanUrl}`);
+
+        this.player.load(cleanUrl)
+            .then(() => {
+                console.log(`✅ Loaded: ${cleanUrl}`);
+                this.useSample = true;
+                this.mode = 'sample';
+            })
+            .catch(e => console.error(`❌ Error loading ${cleanUrl}:`, e));
     }
 
     setDetune(cents) {

@@ -4,8 +4,7 @@ export class HiHatVoice {
     constructor() {
         this.output = new Tone.Volume(0);
 
-        this.filter = new Tone.Filter(3000, "highpass").connect(this.output);
-
+        // Synth Path (Noise hihat)
         this.synth = new Tone.MetalSynth({
             frequency: 200,
             envelope: {
@@ -17,7 +16,7 @@ export class HiHatVoice {
             modulationIndex: 32,
             resonance: 4000,
             octaves: 1.5
-        }).connect(this.filter);
+        }).connect(this.output);
 
         // Sample Path
         this.player = new Tone.Player().connect(this.output);
@@ -36,14 +35,26 @@ export class HiHatVoice {
     }
 
     loadSample(url) {
-        this.player.load(url).then(() => {
-            this.useSample = true;
-            this.mode = 'sample';
-        });
+        if (!url) return;
+
+        // 🛡️ SANITIZE: Fix double slashes if they exist.
+        const cleanUrl = url.startsWith('//') ? url.replace('//', '/') : url;
+
+        console.log(`🎵 Loading sanitized path: ${cleanUrl}`);
+
+        this.player.load(cleanUrl)
+            .then(() => {
+                console.log(`✅ Loaded: ${cleanUrl}`);
+                this.useSample = true;
+                this.mode = 'sample';
+            })
+            .catch(e => console.error(`❌ Error loading ${cleanUrl}:`, e));
     }
 
     setDetune(cents) {
-        this.synth.detune.value = cents;
+        // MetalSynth doesn't have standard detune like membrane? 
+        // We can just modulate frequency slightly if needed, or ignore.
+        // For sample:
         const rate = Math.pow(2, cents / 1200);
         this.player.playbackRate = rate;
     }

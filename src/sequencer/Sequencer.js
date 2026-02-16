@@ -4,13 +4,14 @@ export class Sequencer {
     constructor(audioEngine) {
         this.audioEngine = audioEngine;
         this.steps = 32;
-        this.tracks = ['kick', 'snare', 'hihat', 'resonator', 'live', 'live2', 'pianoloop', 'pianoloop2'];
+        this.tracks = ['kick', 'snare', 'hihat', 'percs', 'resonator', 'live', 'live2', 'pianoloop', 'pianoloop2'];
 
         // logic: pattern[trackIndex][stepIndex] = true/false (or velocity)
         this.pattern = {
             kick: new Array(32).fill(false),
             snare: new Array(32).fill(false),
             hihat: new Array(32).fill(false),
+            percs: new Array(32).fill(false),
             resonator: new Array(32).fill(false),
             live: new Array(32).fill(false),
             live2: new Array(32).fill(false),
@@ -21,8 +22,8 @@ export class Sequencer {
         this.isPlaying = false;
         this.currentStep = 0;
 
-        this.muteStates = { kick: false, snare: false, hihat: false, resonator: false, live: false, live2: false, pianoloop: false, pianoloop2: false };
-        this.soloStates = { kick: false, snare: false, hihat: false, resonator: false, live: false, live2: false, pianoloop: false, pianoloop2: false };
+        this.muteStates = { kick: false, snare: false, hihat: false, percs: false, resonator: false, live: false, live2: false, pianoloop: false, pianoloop2: false };
+        this.soloStates = { kick: false, snare: false, hihat: false, percs: false, resonator: false, live: false, live2: false, pianoloop: false, pianoloop2: false };
 
         // Schedule the loop
         this.loopId = null;

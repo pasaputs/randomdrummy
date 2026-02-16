@@ -35,11 +35,20 @@ export class KickVoice {
     }
 
     loadSample(url) {
-        this.player.load(url).then(() => {
-            this.useSample = true;
-            this.mode = 'sample';
-            console.log(`Kick sample loaded: ${url}`);
-        }).catch(e => console.error("Failed to load sample", e));
+        if (!url) return;
+
+        // 🛡️ SANITIZE: Fix double slashes if they exist.
+        const cleanUrl = url.startsWith('//') ? url.replace('//', '/') : url;
+
+        console.log(`🎵 Loading sanitized path: ${cleanUrl}`);
+
+        this.player.load(cleanUrl)
+            .then(() => {
+                console.log(`✅ Loaded: ${cleanUrl}`);
+                this.useSample = true;
+                this.mode = 'sample';
+            })
+            .catch(e => console.error(`❌ Error loading ${cleanUrl}:`, e));
     }
 
     setDetune(cents) {
@@ -50,7 +59,6 @@ export class KickVoice {
     }
 
     setParam(param, value) {
-        // Placeholder for easier parameter mapping later
         if (param === 'decay') {
             this.synth.envelope.decay = value;
         }

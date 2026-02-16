@@ -3,6 +3,7 @@ import { Mixer } from './Mixer';
 import { RemixControl } from './RemixControl';
 import { PianoRoll } from './PianoRoll';
 import { VaultManager } from './VaultManager';
+import { ArrangerView } from './ArrangerView';
 
 export class UIManager {
     constructor(audioEngine, sequencer) {
@@ -14,6 +15,7 @@ export class UIManager {
         this.mixer = new Mixer(audioEngine);
         this.remix = new RemixControl(sequencer);
         this.vault = new VaultManager(audioEngine);
+        this.arranger = new ArrangerView(audioEngine);
 
 
         this.initTabs();
@@ -28,6 +30,31 @@ export class UIManager {
             if (tabs) tabs.style.display = 'none';
 
             // Update Header Title ? 
+
+            // Add Arrangement Toggle
+            const arrangeBtn = document.createElement('button');
+            arrangeBtn.textContent = 'ARRANGE VIEW';
+            arrangeBtn.id = 'arrange-toggle-btn';
+            arrangeBtn.style.marginLeft = 'auto';
+            arrangeBtn.style.marginRight = '10px';
+            arrangeBtn.style.background = '#333';
+            arrangeBtn.style.border = '1px solid #555';
+            arrangeBtn.style.color = '#ccc';
+            arrangeBtn.style.padding = '4px 10px';
+            arrangeBtn.style.cursor = 'pointer';
+            arrangeBtn.style.fontWeight = 'bold';
+            arrangeBtn.style.fontSize = '0.8rem';
+
+            arrangeBtn.onclick = () => {
+                this.arranger.toggle();
+                arrangeBtn.style.color = this.arranger.isVisible ? '#fff' : '#ccc';
+                arrangeBtn.style.borderColor = this.arranger.isVisible ? '#888' : '#555';
+            };
+
+            // Check if already exists to prevent duplicate on re-init?
+            if (!header.querySelector('#arrange-toggle-btn')) {
+                header.appendChild(arrangeBtn);
+            }
         }
     }
 

@@ -128,6 +128,21 @@ export class VaultManager {
         item.style.fontSize = '0.8rem';
         item.style.borderBottom = '1px solid #444';
 
+        // --- DRAG LOGIC START ---
+        item.draggable = true;
+        item.style.cursor = 'grab';
+
+        item.ondragstart = (e) => {
+            const data = JSON.stringify({
+                id: id,
+                url: url,
+                name: `Loop #${id}`
+            });
+            e.dataTransfer.setData('application/json', data);
+            e.dataTransfer.effectAllowed = 'copy';
+        };
+        // --- DRAG LOGIC END ---
+
         const name = document.createElement('span');
         name.textContent = `Loop #${id} (${(blob.size / 1024).toFixed(0)}KB)`;
         name.style.flex = '1';

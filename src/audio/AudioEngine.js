@@ -22,9 +22,25 @@ export class AudioEngine {
         this.master.connect(this.masterRecorder);
 
         // Vault Recorder (32-Step Loop)
-        this.vaultRecorder = new Tone.Recorder();
-        this.master.connect(this.vaultRecorder);
+        // Switch to MediaStreamDestination for robustness
+        this.vaultDest = Tone.context.createMediaStreamDestination();
+        Tone.getDestination().connect(this.vaultDest); // Connect Master output
+        this.vaultRecorder = new MediaRecorder(this.vaultDest.stream);
+        this.vaultChunks = [];
         this.vaultState = 'IDLE'; // IDLE, ARMED, RECORDING
+
+        // Setup MediaRecorder events
+        this.vaultRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) this.vaultChunks.push(e.data);
+        };
+
+
+        // Arrangement Players
+        this.arrangementPlayers = [];
+        this.isPlayingArrangement = false;
+        this.onArrangementStop = null;
+        this.mode = 'SEQUENCER'; // 'SEQUENCER' or 'ARRANGEMENT'
+
 
         // Per-Track Delays
         this.trackDelays = {};
@@ -763,26 +779,161 @@ export class AudioEngine {
     }
 
     async startVaultRecording() {
-        if (this.vaultRecorder.state !== 'started') {
+        // 1. COOLDOWN CHECK: If we started recently, IGNORE double trigger.
+        if (this.vaultCooldown) {
+            console.warn("⚠️ Vault is in cooldown. Ignoring double trigger.");
+            return;
+        }
+
+        // 2. Activate Cooldown (Lock for 1s)
+        this.vaultCooldown = true;
+        setTimeout(() => { this.vaultCooldown = false; }, 1000);
+
+        // 3. FORCE RESET: If there's a zombie recorder, kill it.
+        if (this.vaultRecorder && this.vaultRecorder.state !== 'inactive') {
+            console.warn("⚠️ Killing stuck recorder...");
+            try {
+                this.vaultRecorder.stop();
+            } catch (e) {
+                console.warn("Could not stop stuck recorder", e);
+            }
+        }
+
+        console.log("AudioEngine: Starting Fresh Vault Recording...");
+
+        // 2. Ensure Destination exists (Renumbered to 4 actually, but logic holds)
+        if (!this.dest) {
+            this.dest = Tone.context.createMediaStreamDestination();
+            Tone.getDestination().connect(this.dest);
+        }
+
+        // 3. Setup Recorder with Supported MimeType
+        let mimeType = "audio/webm;codecs=opus";
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = "audio/ogg;codecs=opus";
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = "";
+            }
+        }
+
+        try {
+            this.vaultRecorder = new MediaRecorder(this.dest.stream, mimeType ? { mimeType } : undefined);
+            this.vaultChunks = [];
+
+            // 4. DATA HANDLING
+            this.vaultRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) this.vaultChunks.push(e.data);
+            };
+
+            // 5. SAVE ON STOP
+            this.vaultRecorder.onstop = () => {
+                console.log("📼 STOP EVENT FIRED. Processing blob...");
+                const blob = new Blob(this.vaultChunks, { type: mimeType || 'audio/webm' });
+
+                // --- Dispatch Event (UI handles download/list) ---
+                this.vaultState = 'IDLE';
+                window.dispatchEvent(new CustomEvent('vaultStateChanged', { detail: { state: 'IDLE' } }));
+                window.dispatchEvent(new CustomEvent('vaultRecordingFinished', { detail: { blob: blob } }));
+            };
+
+            // 6. START
             this.vaultRecorder.start();
             this.vaultState = 'RECORDING';
-            console.log("Vault Recording STARTED");
             window.dispatchEvent(new CustomEvent('vaultStateChanged', { detail: { state: 'RECORDING' } }));
+            console.log(`⏺️ MediaRecorder Started (${mimeType || 'default'})`);
+
+        } catch (err) {
+            console.error("❌ MediaRecorder Error:", err);
+            this.vaultState = 'IDLE';
         }
     }
 
-    async stopVaultRecording() {
-        if (this.vaultRecorder.state === 'started') {
-            const blob = await this.vaultRecorder.stop();
-            this.vaultState = 'IDLE';
-            console.log("Vault Recording STOPPED");
+    stopVaultRecording() {
+        if (this.vaultRecorder && this.vaultRecorder.state !== 'inactive') {
+            console.log("⏹️ Stopping MediaRecorder...");
+            this.vaultRecorder.stop();
+        } else {
+            console.warn("⚠️ stopVaultRecording called, but recorder was not recording.");
+        }
+        this.vaultState = 'IDLE';
+    }
 
-            window.dispatchEvent(new CustomEvent('vaultStateChanged', { detail: { state: 'IDLE' } }));
+    // --- Arrangement Playback ---
 
-            // Dispatch event with blob
-            window.dispatchEvent(new CustomEvent('vaultRecordingFinished', { detail: { blob: blob } }));
+    async playArrangement(clips, onStopCallback = null) {
+        // 1. Cleanup Previous
+        this.stopArrangement();
 
-            return blob;
+        this.mode = 'ARRANGEMENT';
+        this.isPlayingArrangement = true;
+        this.onArrangementStop = onStopCallback; // Store callback
+
+        console.log(`Starting Arrangement with ${clips.length} clips.`);
+
+        window.dispatchEvent(new CustomEvent('arrangementStarted'));
+
+        // 2. Create NEW Players and Schedule
+        let maxEndTime = 0;
+
+        this.arrangementPlayers = clips.map(clip => {
+            if (!clip.url) return null;
+            const player = new Tone.Player(clip.url).toDestination();
+
+            // Sync to Transport
+            player.sync().start(clip.startTime);
+
+            // Calculate End Time
+            const duration = clip.duration || 2;
+            const endTime = clip.startTime + duration;
+            if (endTime > maxEndTime) maxEndTime = endTime;
+
+            return player;
+        }).filter(p => p !== null);
+
+        // Schedule Auto-Stop
+        Tone.Transport.schedule(() => {
+            console.log("Auto-stopping arrangement...");
+            this.stopArrangement();
+        }, maxEndTime + 0.5); // Small buffer
+
+        // 3. Start Transport
+        if (Tone.context.state !== 'running') await Tone.start();
+        Tone.Transport.position = 0; // Always start from beginning
+        Tone.Transport.start();
+
+        return true;
+    }
+
+    stopArrangement() {
+        // 1. Stop Transport first
+        Tone.Transport.stop();
+        Tone.Transport.position = 0;
+        Tone.Transport.cancel();     // Clear scheduled events
+
+        // 2. Safely clean up players
+        if (this.arrangementPlayers && this.arrangementPlayers.length > 0) {
+            this.arrangementPlayers.forEach(player => {
+                try {
+                    player.unsync(); // CRITICAL
+                    if (player.state === 'started') {
+                        player.stop();
+                    }
+                    player.dispose();
+                } catch (e) {
+                    console.warn("Error disposing player:", e);
+                }
+            });
+        }
+        this.arrangementPlayers = [];
+        this.isPlayingArrangement = false;
+        this.mode = 'SEQUENCER'; // Reset mode to default
+
+        window.dispatchEvent(new CustomEvent('arrangementStopped'));
+
+        // Trigger Callback
+        if (this.onArrangementStop) {
+            this.onArrangementStop();
+            this.onArrangementStop = null;
         }
     }
 }

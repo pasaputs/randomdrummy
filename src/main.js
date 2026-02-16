@@ -33,3 +33,25 @@ sequencer.setStepCallback((step) => {
 engine.init().then(() => {
     console.log("Audio Engine Ready");
 });
+
+// Global Shortcuts
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+        e.preventDefault(); // Stop scrolling
+
+        // Check Visibility via DOM (Robust)
+        const overlay = document.getElementById('arrangement-overlay');
+        const isArrangementVisible = overlay && overlay.style.display !== 'none';
+
+        if (isArrangementVisible && ui.arrangerView) {
+            ui.arrangerView.togglePlay();
+        } else {
+            // Main Sequencer Toggle
+            if (sequencer.isPlaying) {
+                sequencer.stop();
+            } else {
+                sequencer.start();
+            }
+        }
+    }
+});

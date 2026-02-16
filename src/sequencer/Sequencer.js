@@ -26,9 +26,31 @@ export class Sequencer {
 
         // Schedule the loop
         this.loopId = null;
+
+        // Listen for Arrangement Events to restore grid loop
+        window.addEventListener('arrangementStopped', () => {
+            console.log("Sequencer: Restoring Grid Loop...");
+            this.reschedule();
+        });
     }
 
-    start() {
+    reschedule() {
+        if (this.loopId !== null) {
+            Tone.Transport.clear(this.loopId);
+        }
+        this.init();
+    }
+
+    async start() {
+        if (this.audioEngine.mode === 'ARRANGEMENT') {
+            console.log("Sequencer: Stopping Arrangement first...");
+            this.audioEngine.stopArrangement();
+        }
+
+        if (Tone.context.state !== 'running') {
+            await Tone.start();
+        }
+
         Tone.Transport.start();
         this.isPlaying = true;
     }
@@ -54,15 +76,24 @@ export class Sequencer {
 
         // --- Vault Logic ---
         if (step === 0 && this.audioEngine.vaultState === 'ARMED') {
-            this.audioEngine.startVaultRecording();
-        }
+            // 1. Change state FIRST to prevent re-entry
+            this.audioEngine.vaultState = 'RECORDING';
 
-        if (step === 31 && this.audioEngine.vaultState === 'RECORDING') {
-            const stepDuration = Tone.Time("16n").toSeconds();
+            // 2. Start Recording
+            this.audioEngine.startVaultRecording();
+            console.log("🔴 Vault: Recording STARTED (Atomic Trigger)");
+
+            // 2. Schedule exact stop (32 steps = 2 measures)
+            const recordingDuration = Tone.Time("2m").toSeconds();
+            // Tone.Time("2m") assumes 4/4 signature. 2 measures = 8 beats = 32 sixteenths. Correct.
+
             setTimeout(() => {
                 this.audioEngine.stopVaultRecording();
-            }, stepDuration * 1000);
+                console.log("✅ Vault: Stopped automatically after 2 measures");
+            }, recordingDuration * 1000);
         }
+        // Removed step 31 check since we use setTimeout now
+
 
         this.remixAmount = this.remixAmount || 0;
 
